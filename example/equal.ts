@@ -1,1 +1,1 @@
-export = {equal: 1};
+export = { equal: 1 };

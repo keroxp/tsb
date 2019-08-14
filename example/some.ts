@@ -1,3 +1,3 @@
 export default {
-    prop: 1
+  prop: 1
 };

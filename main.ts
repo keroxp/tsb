@@ -1,12 +1,13 @@
 import * as ts from "typescript";
 import * as fs from "fs";
-import { StringLiteral } from "typescript";
+import * as path from "path";
+import * as cacheDir from "cachedir";
 
 function createTransformers() {
   const swapImport = <T extends ts.Node>(context: ts.TransformationContext) => (
     rootNode: T
   ) => {
-    function visit(node: ts.Node): ts.Node {
+    function visit(node: ts.Node): ts.VisitResult<ts.Node> {
       node = ts.visitEachChild(node, visit, context);
       if (ts.isImportDeclaration(node)) {
         return transformImport(node);
@@ -20,9 +21,12 @@ function createTransformers() {
         return transformExportVariableStatement(node);
       } else if (ts.isClassDeclaration(node)) {
         return transformExportClassDeclaration(node);
+      } else if (ts.isEnumDeclaration(node)) {
+        return transformExportEnumDeclaration(node);
       }
       return node;
     }
+
     return ts.visitNode(rootNode, visit);
   };
   return [swapImport];
@@ -31,6 +35,7 @@ function createTransformers() {
 function createTsbImportAccess(): ts.Expression {
   return ts.createPropertyAccess(ts.createIdentifier("tsb"), "import");
 }
+
 function createTsbExportAccess(): ts.Expression {
   return ts.createPropertyAccess(ts.createIdentifier("tsb"), "export");
 }
@@ -83,19 +88,25 @@ function transformImport(node: ts.ImportDeclaration): ts.Node {
 
 function transformExportDeclaration(node: ts.ExportDeclaration): ts.Node {
   const exportClause = node.exportClause;
-  const module = node.moduleSpecifier as StringLiteral;
+  const module = node.moduleSpecifier;
   if (exportClause) {
     const exprs = exportClause.elements.map(v => {
       let propertyName: string = v.name.text;
       if (v.propertyName) {
         propertyName = v.propertyName.text;
       }
-      return ts.createAssignment(
-        ts.createPropertyAccess(createTsbExportAccess(), v.name.text),
-        ts.createPropertyAccess(
+      let right: ts.Expression;
+      if (module) {
+        right = ts.createPropertyAccess(
           ts.createCall(createTsbImportAccess(), undefined, [module]),
           propertyName
-        )
+        );
+      } else {
+        right = v.name;
+      }
+      return ts.createAssignment(
+        ts.createPropertyAccess(createTsbExportAccess(), v.name.text),
+        right
       );
     });
     return ts.createCommaList(exprs);
@@ -103,7 +114,7 @@ function transformExportDeclaration(node: ts.ExportDeclaration): ts.Node {
     return ts.createCall(
       ts.createPropertyAccess(ts.createIdentifier("tsb"), "assignExport"),
       undefined,
-      [ts.createCall(createTsbImportAccess(), undefined, [module])]
+      [ts.createCall(createTsbImportAccess(), undefined, [module!])]
     );
   }
 }
@@ -131,23 +142,46 @@ function transformExportFunctionDeclaration(
     node.modifiers &&
     node.modifiers[0].kind === ts.SyntaxKind.ExportKeyword
   ) {
-    // export function a() {}
-    // -> export.a = function a() {}
-    return ts.createAssignment(
-      ts.createPropertyAccess(createTsbExportAccess(), node.name!),
-      ts.createFunctionExpression(
-        undefined,
-        undefined,
-        node.name,
-        undefined,
-        undefined,
-        undefined,
-        node.body!
-      )
-    );
+    if (
+      node.modifiers[1] &&
+      node.modifiers[1].kind === ts.SyntaxKind.DefaultKeyword
+    ) {
+      // export default function a() {}
+      // -> export.default = function a() {}
+      const [_, __, ...rest] = node.modifiers;
+      return ts.createAssignment(
+        ts.createPropertyAccess(createTsbExportAccess(), "default"),
+        ts.createFunctionExpression(
+          [...rest],
+          undefined,
+          node.name,
+          undefined,
+          undefined,
+          undefined,
+          node.body!
+        )
+      );
+    } else {
+      // export function a() {}
+      // -> export.a = function a() {}
+      const [_, ...rest] = node.modifiers;
+      return ts.createAssignment(
+        ts.createPropertyAccess(createTsbExportAccess(), node.name!),
+        ts.createFunctionExpression(
+          [...rest],
+          undefined,
+          node.name,
+          undefined,
+          undefined,
+          undefined,
+          node.body!
+        )
+      );
+    }
   }
   return node;
 }
+
 function transformExportVariableStatement(node: ts.VariableStatement) {
   if (
     node.modifiers &&
@@ -168,15 +202,27 @@ function transformExportVariableStatement(node: ts.VariableStatement) {
   }
   return node;
 }
+
 function transformExportClassDeclaration(node: ts.ClassDeclaration) {
   if (
     node.modifiers &&
     node.modifiers[0].kind === ts.SyntaxKind.ExportKeyword
   ) {
-    // export class Class{}
-    // -> export.Class = Class;
+    let left: ts.Expression;
+    if (
+      node.modifiers[1] &&
+      node.modifiers[1].kind === ts.SyntaxKind.DefaultKeyword
+    ) {
+      // export default class Class {}
+      // -> tsb.export.default = Class
+      left = ts.createPropertyAccess(createTsbExportAccess(), "default");
+    } else {
+      // export class Class{}
+      // -> tsb.export.Class = Class;
+      left = ts.createPropertyAccess(createTsbExportAccess(), node.name!);
+    }
     return ts.createAssignment(
-      ts.createPropertyAccess(createTsbExportAccess(), node.name!),
+      left,
       ts.createClassExpression(
         undefined,
         node.name,
@@ -188,24 +234,113 @@ function transformExportClassDeclaration(node: ts.ClassDeclaration) {
   }
   return node;
 }
-async function action() {
-  const srcText = String(fs.readFileSync("./example/example.ts"));
-  const src = ts.createSourceFile(
-    "example.ts",
-    srcText,
-    ts.ScriptTarget.ESNext
-  );
-  const transformers = createTransformers();
-  const result = ts.transform(src, transformers);
-  const printer = ts.createPrinter();
-  const transformed = printer.printFile(result.transformed[0] as ts.SourceFile);
-  console.log(transformed);
-}
-action();
 
-export interface Tsb {
-  import();
-  export: any;
-  assignExport(b: any);
+function transformExportEnumDeclaration(node: ts.EnumDeclaration): ts.Node[] {
+  if (
+    node.modifiers &&
+    node.modifiers[0].kind === ts.SyntaxKind.ExportKeyword
+  ) {
+    // export enum Enum {}
+    // -> enum Enum {}, tsb.export.Enum = Enum
+    const [_, ...rest] = node.modifiers;
+    return [
+      ts.createEnumDeclaration(
+        node.decorators,
+        [...rest],
+        node.name,
+        node.members
+      ),
+      ts.createAssignment(
+        ts.createPropertyAccess(createTsbExportAccess(), node.name),
+        node.name
+      )
+    ];
+  }
+  return [node];
 }
-export type TsbModule = (moduleSpecifier: string, tsb: Tsb) => unknown;
+async function readFileAsync(file: string): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    fs.readFile(file, (err, data) => {
+      err ? reject(err) : resolve(String(data));
+    });
+  });
+}
+
+const kUriRegex = /^(https?):\/\/(.+?)$/;
+const kRelativeRegex = /^\.\.?\/.+?\.ts$/;
+
+async function traverseDependencyTree(
+  file: string,
+  dependencyTree: Map<string, string[]>
+): Promise<void> {
+  if (dependencyTree.has(file)) {
+    return;
+  }
+  const dependencies: string[] = [];
+  dependencyTree.set(file, dependencies);
+  function visit(node: ts.Node) {
+    if (ts.isImportDeclaration(node)) {
+      const dependency = (node.moduleSpecifier as ts.StringLiteral).text;
+      dependencies.push(dependency);
+    }
+  }
+  const text = await readFileAsync(file);
+  const src = ts.createSourceFile(file, text, ts.ScriptTarget.ESNext);
+  ts.forEachChild(src, visit);
+  for (const dependency of dependencies) {
+    let resolvedPath: string;
+    let m: RegExpMatchArray | null;
+    if ((m = dependency.match(kUriRegex))) {
+      const [_, scheme, pathname] = m;
+      resolvedPath = path.resolve(
+        path.join(cacheDir("deno"), `deps/${scheme}/${pathname}`)
+      );
+    } else if ((m = dependency.match(kRelativeRegex))) {
+      const dir = path.dirname(file);
+      resolvedPath = path.resolve(path.join(dir, dependency));
+    } else {
+      throw new Error("invalid module specifier: " + file);
+    }
+    await traverseDependencyTree(resolvedPath, dependencyTree);
+  }
+}
+
+async function bundle(entry: string) {
+  const tree = new Map();
+  await traverseDependencyTree(entry, tree);
+  // console.log(tree.entries());
+  const transformers = createTransformers();
+  const printer = ts.createPrinter();
+  let template = await readFileAsync("./template.ts");
+  const modules: string[] = [];
+  for (const [file, dependency] of tree.entries()) {
+    const text = await readFileAsync(file);
+    const id = path.relative(entry, file);
+    const src = ts.createSourceFile(id, text, ts.ScriptTarget.ESNext);
+    const result = ts.transform(src, transformers);
+    const transformed = printer.printFile(result
+      .transformed[0] as ts.SourceFile);
+    const transpiled = ts.transpile(transformed, {
+      target: ts.ScriptTarget.ESNext
+    });
+    modules.push(`define("${file}", (tsb) => { ${transpiled} })`);
+  }
+  const body = `${modules.join(",")}`;
+  template = template.replace("//{@modules}", body);
+  const output = ts.transpile(template, {
+    target: ts.ScriptTarget.ESNext
+  });
+  console.log(output);
+}
+
+async function action() {
+  const target = process.argv[process.argv.length - 1];
+  if (!target) {
+    console.error("file path not provided");
+    process.exit(1);
+  }
+  const entry = "./" + path.relative(".", target);
+  await bundle(entry);
+}
+
+action();

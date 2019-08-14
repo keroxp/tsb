@@ -6,7 +6,11 @@
   "repository": "https://github.com/keroxp/tsb",
   "author": "keroxp <kerokerokerop@gmail.com>",
   "license": "MIT",
+  "scripts": {
+    "fmt": "prettier --write '**/*.ts'"
+  },
   "dependencies": {
+    "cachedir": "^2.2.0",
     "typescript": "^3.5.3"
   },
   "devDependencies": {
