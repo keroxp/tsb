@@ -1,7 +1,7 @@
-export function callOther() {
-  return 1;
+export function callOther(): string {
+  return "other";
 }
 
-export function callNever() {
-  return 1;
+export function callNever(): string {
+  return "never";
 }

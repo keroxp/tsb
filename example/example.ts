@@ -1,6 +1,7 @@
-import { serve } from "https://deno.land/std@v0.12.0/http/server.ts";
+// import { serve } from "https://deno.land/std@v0.12.0/http/server.ts";
+import { cyan } from "https://deno.land/std@v0.12.0/colors/mod.ts";
 import some from "./some.ts";
-import { callOther, callNever as callAnother } from "./other.ts";
+import { callOther, callNever as callAnother, callNever } from "./other.ts";
 import * as hoge from "./hoge.ts";
 
 export default { a: 1 };
@@ -17,3 +18,5 @@ enum Hoge {
   v = 2
 }
 export { Hoge };
+
+console.log(cyan(callOther() + ":" + callNever()));
