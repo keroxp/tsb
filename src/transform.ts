@@ -1,5 +1,7 @@
 import * as ts from "typescript";
-import { normalizeModule, SourceFile } from "./bundle";
+import * as url from "url";
+import { kUriRegex, SourceFile } from "./bundle";
+import * as path from "path";
 
 function createTsbImportAccess(): ts.Expression {
   return ts.createPropertyAccess(ts.createIdentifier("tsb"), "import");
@@ -11,7 +13,10 @@ function createTsbExportAccess(): ts.Expression {
 export class Transformer {
   shouldMergeExport: boolean = false;
 
-  constructor(readonly sourceFile: SourceFile) {}
+  constructor(
+    readonly moduleId: string,
+    readonly moduleResolver: (moduleId: string, dep: string) => string
+  ) {}
 
   transformers() {
     const swapImport = <T extends ts.Node>(
@@ -42,8 +47,7 @@ export class Transformer {
   }
 
   normalizeModuleSpecifier(m: string): string {
-    const parent = normalizeModule(this.sourceFile);
-    return normalizeModule({ canonicalParentName: parent, canonicalName: m });
+    return this.moduleResolver(this.moduleId, m);
   }
 
   transformImport(node: ts.ImportDeclaration): ts.Node {

@@ -21,13 +21,41 @@ export type SourceFile = {
   canonicalName: string;
 };
 
-function resolveUri(id: string): string {
+async function fileExists(p: string): Promise<boolean> {
+  return new Promise<boolean>((resolve, reject) => {
+    fs.stat(p, err => {
+      if (err) {
+        if (err.code === "ENOENT") {
+          return resolve(false);
+        } else {
+          reject(err);
+        }
+      } else {
+        resolve(true);
+      }
+    });
+  });
+}
+
+async function resolveUri(id: string): Promise<string> {
   let m: RegExpMatchArray | null;
   if ((m = id.match(kUriRegex))) {
     const [_, scheme, pathname] = m;
-    return path.resolve(
+    let ret = path.resolve(
       path.join(cacheDir("deno"), `deps/${scheme}/${pathname}`)
     );
+    if (!(await fileExists(ret))) {
+      ret = path.resolve(
+        path.join(cacheDir("deno"), `deps/${scheme}/${pathname}.headers.json`)
+      );
+      if (!(await fileExists(ret))) {
+        throw new Error("file not found: " + id + " " + ret);
+      }
+      const { redirect_to } = JSON.parse(await readFileAsync(ret));
+      return resolveUri(redirect_to);
+    } else {
+      return ret;
+    }
   } else if (id.match(kRelativeRegex)) {
     return path.resolve(id);
   } else {
@@ -37,17 +65,19 @@ function resolveUri(id: string): string {
 
 async function traverseDependencyTree(
   sourceFile: SourceFile,
-  dependencyTree: Map<string, SourceFile>
+  dependencyTree: Map<string, SourceFile>,
+  redirectionMap: Map<string, string>
 ): Promise<void> {
   const dependencies: string[] = [];
   let id: string;
-  id = normalizeModule(sourceFile);
+  id = await resolveModuleId(sourceFile);
+  redirectionMap.set(normalizeModuleId(sourceFile), id);
   if (dependencyTree.has(id)) {
     return;
   }
   dependencyTree.set(id, sourceFile);
 
-  function visit(node: ts.Node) {
+  const visit = (node: ts.Node) => {
     if (ts.isImportDeclaration(node)) {
       const dependency = (node.moduleSpecifier as ts.StringLiteral).text;
       dependencies.push(dependency);
@@ -65,59 +95,111 @@ async function traverseDependencyTree(
         dependencies.push((module as ts.StringLiteral).text);
       }
     }
-  }
+  };
 
-  const resolvedPath = resolveUri(id);
+  const resolvedPath = await resolveUri(id);
   const text = await readFileAsync(resolvedPath);
   const src = ts.createSourceFile(resolvedPath, text, ts.ScriptTarget.ESNext);
   ts.forEachChild(src, visit);
   for (const dependency of dependencies) {
     await traverseDependencyTree(
       { canonicalName: dependency, canonicalParentName: id },
-      dependencyTree
+      dependencyTree,
+      redirectionMap
     );
   }
 }
 
-export function normalizeModule(source: SourceFile): string {
+export function normalizeModuleId(source: SourceFile): string {
   if (source.canonicalName.match(kUriRegex)) {
-    // import("https://...")
     return source.canonicalName;
-  }
-  if (source.canonicalParentName.match(kUriRegex)) {
+  } else if (source.canonicalParentName.match(kUriRegex)) {
     // url + relative
     return url.resolve(source.canonicalParentName, source.canonicalName);
   } else {
     // relative + relative
-    const dir = path.dirname(source.canonicalParentName);
     const cwd = process.cwd();
-    return path.relative(cwd, path.join(dir, source.canonicalName));
+    const dir = path.dirname(source.canonicalParentName);
+    return "./" + path.relative(cwd, path.join(dir, source.canonicalName));
+  }
+}
+
+export async function resolveModuleId(source: SourceFile): Promise<string> {
+  let m: RegExpMatchArray | null;
+  if ((m = source.canonicalName.match(kUriRegex))) {
+    // import("https://...")
+    const [_, scheme, pathname] = m;
+    const cachePath = path.join(cacheDir("deno"), `deps/${scheme}/${pathname}`);
+    if (!(await fileExists(cachePath))) {
+      if (!(await fileExists(cachePath + ".headers.json"))) {
+        throw new Error("not found: " + source.canonicalName);
+      }
+      const { redirect_to } = JSON.parse(
+        await readFileAsync(cachePath + ".headers.json")
+      );
+      return resolveModuleId({
+        canonicalParentName: ".",
+        canonicalName: redirect_to
+      });
+    } else {
+      return source.canonicalName;
+    }
+  } else if (source.canonicalParentName.match(kUriRegex)) {
+    // url + relative
+    return resolveModuleId({
+      canonicalParentName: ".",
+      canonicalName: url.resolve(
+        source.canonicalParentName,
+        source.canonicalName
+      )
+    });
+  } else {
+    // relative + relative
+    const cwd = process.cwd();
+    const dir = path.dirname(source.canonicalParentName);
+    return "./" + path.relative(cwd, path.join(dir, source.canonicalName));
   }
 }
 
 export async function bundle(entry: string) {
   const tree = new Map<string, SourceFile>();
+  const redirectionMap = new Map<string, string>();
   let canonicalName: string;
   if (entry.match(kUriRegex)) {
     canonicalName = entry;
   } else {
-    canonicalName = path.relative(process.cwd(), entry);
+    canonicalName = "./" + path.relative(process.cwd(), entry);
   }
   await traverseDependencyTree(
     {
       canonicalName,
       canonicalParentName: "."
     },
-    tree
+    tree,
+    redirectionMap
   );
   const printer = ts.createPrinter();
   let template = await readFileAsync(path.resolve(__dirname, "template.ts"));
+  const resolveModule = (moduleId: string, dep: string): string => {
+    const redirection = redirectionMap.get(moduleId);
+    if (!redirection) {
+      throw new Error(`${moduleId} not found in redirection map`);
+    }
+    if (dep.match(kUriRegex)) {
+      const ret = redirectionMap.get(dep);
+      if (!ret) {
+        throw new Error(`${dep} not found in redirection map`);
+      }
+      return ret;
+    } else {
+      return url.resolve(redirection, dep);
+    }
+  };
   const modules: string[] = [];
-  for (const [file, sourceFile] of tree.entries()) {
-    const transformer = new Transformer(sourceFile);
-    const text = await readFileAsync(resolveUri(file));
-    let id = normalizeModule(sourceFile);
-    const src = ts.createSourceFile(id, text, ts.ScriptTarget.ESNext);
+  for (const [moduleId, sourceFile] of tree.entries()) {
+    const transformer = new Transformer(moduleId, resolveModule);
+    const text = await readFileAsync(await resolveUri(moduleId));
+    const src = ts.createSourceFile(moduleId, text, ts.ScriptTarget.ESNext);
     const result = ts.transform(src, transformer.transformers());
     const transformed = printer.printFile(result
       .transformed[0] as ts.SourceFile);
@@ -132,13 +214,13 @@ export async function bundle(entry: string) {
       ${body}
       `;
     }
-    modules.push(`"${id}": (tsb) => { ${body} }`);
+    modules.push(`"${moduleId}": (tsb) => { ${body} }`);
   }
   const body = `${modules.join(",")}`;
   template = template.replace("/*{@modules}*/", body);
   template = template.replace(
     "{@entryId}",
-    path.relative(process.cwd(), entry)
+    await resolveModuleId({ canonicalName: entry, canonicalParentName: "." })
   );
   const output = ts.transpile(template, {
     target: ts.ScriptTarget.ESNext

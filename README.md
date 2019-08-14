@@ -1,10 +1,14 @@
 # tsb
 TypeScript module bundler for Deno
 
+# Description
+
+`tsb` is module bundler for Deno. It bundles TypeScript modules built with pure ESModule.
+
 # Usage
 
 ```bash
-$ deno fetch https://deno.land/std/http/server.ts
-$ ts-node src/main.ts https://deno.land/std/http/server.ts > bundle.js
-$ deno -A file_server_bundle.js
+$ deno fetch ./example/server.ts
+$ ts-node src/main.ts ./example/server.ts > bundle.js
+$ deno -A bundle.js
 ```
