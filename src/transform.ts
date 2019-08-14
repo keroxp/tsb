@@ -1,7 +1,5 @@
+// Copyright 2019 Yusuke Sakurai. All rights reserved. MIT license.
 import * as ts from "typescript";
-import * as url from "url";
-import { kUriRegex, SourceFile } from "./bundle";
-import * as path from "path";
 
 function createTsbImportAccess(): ts.Expression {
   return ts.createPropertyAccess(ts.createIdentifier("tsb"), "import");

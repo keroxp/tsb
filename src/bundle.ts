@@ -1,3 +1,4 @@
+// Copyright 2019 Yusuke Sakurai. All rights reserved. MIT license.
 import * as path from "path";
 import * as url from "url";
 import { Transformer } from "./transform";

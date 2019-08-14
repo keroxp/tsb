@@ -1,3 +1,4 @@
+// Copyright 2019 Yusuke Sakurai. All rights reserved. MIT license.
 interface Tsb {
   import(module: string): any;
   exports: any;

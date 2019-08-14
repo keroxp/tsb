@@ -12,3 +12,7 @@ $ deno fetch ./example/server.ts
 $ ts-node src/main.ts ./example/server.ts > bundle.js
 $ deno -A bundle.js
 ```
+
+# License
+
+MIT
