@@ -1,0 +1,16 @@
+{
+  "name": "tsb",
+  "version": "0.0.1",
+  "description": "TypeScript module bundler",
+  "main": "index.js",
+  "repository": "https://github.com/keroxp/tsb",
+  "author": "keroxp <kerokerokerop@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "typescript": "^3.5.3"
+  },
+  "devDependencies": {
+    "@types/node": "^12.7.1",
+    "prettier": "^1.18.2"
+  }
+}

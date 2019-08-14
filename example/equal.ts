@@ -1,0 +1,1 @@
+export = {equal: 1};
