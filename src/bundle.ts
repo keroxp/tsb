@@ -97,9 +97,15 @@ export function normalizeModule(source: SourceFile): string {
 
 export async function bundle(entry: string) {
   const tree = new Map<string, SourceFile>();
+  let canonicalName: string;
+  if (entry.match(kUriRegex)) {
+    canonicalName = entry;
+  } else {
+    canonicalName = path.relative(process.cwd(), entry);
+  }
   await traverseDependencyTree(
     {
-      canonicalName: path.relative(process.cwd(), entry),
+      canonicalName,
       canonicalParentName: "."
     },
     tree
