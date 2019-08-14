@@ -1,6 +1,5 @@
 import * as ts from "typescript";
-import * as path from "path";
-import { kRelativeRegex, kUriRegex } from "./main";
+import { normalizeModule, SourceFile } from "./bundle";
 
 function createTsbImportAccess(): ts.Expression {
   return ts.createPropertyAccess(ts.createIdentifier("tsb"), "import");
@@ -9,16 +8,10 @@ function createTsbImportAccess(): ts.Expression {
 function createTsbExportAccess(): ts.Expression {
   return ts.createPropertyAccess(ts.createIdentifier("tsb"), "exports");
 }
-
-export function createTransformers(file: string): Transformer {
-  const t = new Transformer(file);
-  return t;
-}
-
-class Transformer {
+export class Transformer {
   shouldMergeExport: boolean = false;
 
-  constructor(readonly file: string) {}
+  constructor(readonly sourceFile: SourceFile) {}
 
   transformers() {
     const swapImport = <T extends ts.Node>(
@@ -49,14 +42,8 @@ class Transformer {
   }
 
   normalizeModuleSpecifier(m: string): string {
-    if (m.match(kUriRegex)) {
-      return m;
-    } else if (m.match(kRelativeRegex)) {
-      const dir = path.dirname(this.file);
-      const resolved = path.join(dir, m);
-      return path.relative(process.cwd(), resolved);
-    }
-    throw new Error("invalid module specifier: " + m);
+    const parent = normalizeModule(this.sourceFile);
+    return normalizeModule({ canonicalParentName: parent, canonicalName: m });
   }
 
   transformImport(node: ts.ImportDeclaration): ts.Node {
@@ -163,7 +150,9 @@ class Transformer {
     }
   }
 
-  transformExportFunctionDeclaration(node: ts.FunctionDeclaration): ts.Node {
+  transformExportFunctionDeclaration(
+    node: ts.FunctionDeclaration
+  ): ts.VisitResult<ts.Node> {
     if (
       node.modifiers &&
       node.modifiers[0].kind === ts.SyntaxKind.ExportKeyword
@@ -189,10 +178,11 @@ class Transformer {
         );
       } else {
         // export function a() {}
-        // -> export.a = function a() {}
+        // ->
+        // function a() {}
+        // export.a = a;
         const [_, ...rest] = node.modifiers;
-        return ts.createAssignment(
-          ts.createPropertyAccess(createTsbExportAccess(), node.name!),
+        return [
           ts.createFunctionExpression(
             [...rest],
             node.asteriskToken,
@@ -201,8 +191,12 @@ class Transformer {
             node.parameters,
             node.type,
             node.body!
+          ),
+          ts.createAssignment(
+            ts.createPropertyAccess(createTsbExportAccess(), node.name!),
+            node.name!
           )
-        );
+        ];
       }
     }
     return node;
@@ -214,17 +208,24 @@ class Transformer {
       node.modifiers[0].kind === ts.SyntaxKind.ExportKeyword
     ) {
       // export const a = {}
-      // -> export.a = {};
+      // ->
+      // const a = {}
+      // export.a = a;
+      const [_, ...restModifiers] = node.modifiers;
+      const declarations = ts.createVariableStatement(
+        restModifiers,
+        node.declarationList
+      );
       const exprs = node.declarationList.declarations.map(v => {
         return ts.createAssignment(
           ts.createPropertyAccess(
             createTsbExportAccess(),
             (v.name as ts.Identifier).text
           ),
-          v.initializer!
+          v.name as ts.Identifier
         );
       });
-      return ts.createCommaList(exprs);
+      return [declarations, ...exprs];
     }
     return node;
   }
