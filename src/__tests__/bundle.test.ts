@@ -1,5 +1,5 @@
 import { normalizeModuleId } from "../bundle";
-
+import * as ts from "typescript";
 describe("bundle", () => {
   describe("normalizeModule", () => {
     test("url + relative", () => {
@@ -29,6 +29,13 @@ describe("bundle", () => {
         canonicalName: "./example/some.ts"
       });
       expect(res).toBe("./example/some.ts");
+    });
+  });
+  test("test", () => {
+    const text = `import("hoge")`;
+    const src = ts.createSourceFile("tex", text, ts.ScriptTarget.ESNext);
+    src.forEachChild(node => {
+      console.log(node);
     });
   });
 });

@@ -29,9 +29,13 @@ describe("transofmrn", () => {
       {
         before: `import http from "https://deno.land/std/http/server.ts";\n`,
         after: `var http = tsb.import("https://deno.land/std/http/server.ts").default;\n`
+      },
+      {
+        before: `import("hoge").then(v => { })`,
+        after: `tsb.importDynamic("hoge").then(v => { });\n`
       }
     ].forEach(({ before, after }, i) => {
-      test(`improt{i}`, () => {
+      test(`improt${i}`, () => {
         const t = new Transformer("./example.ts", (moduleId, dep) => {
           return dep;
         });

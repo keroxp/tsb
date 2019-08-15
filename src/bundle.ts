@@ -82,6 +82,13 @@ async function traverseDependencyTree(
     if (ts.isImportDeclaration(node)) {
       const dependency = (node.moduleSpecifier as ts.StringLiteral).text;
       dependencies.push(dependency);
+    } else if (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword
+    ) {
+      // import("aa").then(v => {})
+      const dependency = (node.arguments[0] as ts.StringLiteral).text;
+      dependencies.push(dependency);
     } else if (ts.isExportDeclaration(node)) {
       const exportClause = node.exportClause;
       const module = node.moduleSpecifier;
@@ -96,6 +103,7 @@ async function traverseDependencyTree(
         dependencies.push((module as ts.StringLiteral).text);
       }
     }
+    ts.forEachChild(node, visit);
   };
 
   const resolvedPath = await resolveUri(id);
@@ -195,7 +203,10 @@ export async function bundle(entry: string) {
       }
       return ret;
     } else {
-      return url.resolve(redirection, dep);
+      return normalizeModuleId({
+        canonicalParentName: moduleId,
+        canonicalName: dep
+      });
     }
   };
   const modules: string[] = [];

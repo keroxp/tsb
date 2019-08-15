@@ -1,6 +1,7 @@
 // Copyright 2019 Yusuke Sakurai. All rights reserved. MIT license.
 interface Tsb {
   import(module: string): any;
+  importDynamic(module: string): Promise<any>;
   exports: any;
   loaded: boolean;
 }
@@ -12,6 +13,7 @@ interface Tsb {
     }
     const module: Tsb = {
       import: tsbImport,
+      importDynamic: d => Promise.resolve(tsbImport(d)),
       loaded: false,
       exports: {}
     };
