@@ -1,11 +1,12 @@
 {
   "name": "@keroxp/tsb",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publishConfig": {
     "access": "public"
   },
+  "bin": "./dist/main.js",
   "description": "TypeScript module bundler for Deno",
-  "main": "lib/main.js",
+  "main": "./dist/main.js",
   "repository": "https://github.com/keroxp/tsb",
   "author": "keroxp <kerokerokerop@gmail.com>",
   "license": "MIT",
