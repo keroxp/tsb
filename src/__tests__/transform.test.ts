@@ -33,6 +33,10 @@ describe("transofmrn", () => {
       {
         before: `import("hoge").then(v => { })`,
         after: `tsb.importDynamic("hoge").then(v => { });\n`
+      },
+      {
+        before: `import "aa"`,
+        after: `tsb.import("aa")\n`
       }
     ].forEach(({ before, after }, i) => {
       test(`improt${i}`, () => {

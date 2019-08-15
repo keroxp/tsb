@@ -57,8 +57,16 @@ export class Transformer {
     const module = this.normalizeModuleSpecifier(
       (importDecl.moduleSpecifier as ts.StringLiteral).text
     );
-    const importName = importDecl.importClause!.name;
-    const bindings = importDecl.importClause!.namedBindings;
+    const importClause = importDecl.importClause;
+    if (!importClause) {
+      // import "aaa"
+      // -> tsb.import("aaa")
+      return ts.createCall(createTsbImportAccess(), undefined, [
+        ts.createStringLiteral(module)
+      ]);
+    }
+    const importName = importClause.name;
+    const bindings = importClause!.namedBindings;
     const args = ts.createStringLiteral(module);
     const importCall = ts.createCall(createTsbImportAccess(), undefined, [
       args
