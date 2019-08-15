@@ -38,11 +38,4 @@ describe("bundle", () => {
       expect(res).toBe("./example/some.ts");
     });
   });
-  test("test", () => {
-    const text = `import("hoge")`;
-    const src = ts.createSourceFile("tex", text, ts.ScriptTarget.ESNext);
-    src.forEachChild(node => {
-      console.log(node);
-    });
-  });
 });

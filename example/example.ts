@@ -4,6 +4,8 @@ import some from "./some.ts";
 import { callOther, callNever as callAnother, callNever } from "./other.ts";
 import * as hoge from "./hoge.ts";
 import "./dynamic_import.ts";
+import other, * as otherAll from "./other.ts";
+import other2, { callNever as callNever2 } from "./other.ts";
 
 export default { a: 1 };
 export const f = 2;

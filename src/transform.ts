@@ -52,7 +52,7 @@ export class Transformer {
     return this.moduleResolver(this.moduleId, m);
   }
 
-  transformImport(node: ts.ImportDeclaration): ts.Node {
+  transformImport(node: ts.ImportDeclaration): ts.VisitResult<ts.Node> {
     const importDecl: ts.ImportDeclaration = node;
     const module = this.normalizeModuleSpecifier(
       (importDecl.moduleSpecifier as ts.StringLiteral).text
@@ -71,17 +71,21 @@ export class Transformer {
     const importCall = ts.createCall(createTsbImportAccess(), undefined, [
       args
     ]);
+    const ret: ts.Node[] = [];
     if (importName) {
       // import a from "aa"
       // -> const a = __tsbImport("aa").default
-      return ts.createVariableStatement(undefined, [
-        ts.createVariableDeclaration(
-          importName,
-          undefined,
-          ts.createPropertyAccess(importCall, "default")
-        )
-      ]);
-    } else if (bindings) {
+      ret.push(
+        ts.createVariableStatement(undefined, [
+          ts.createVariableDeclaration(
+            importName,
+            undefined,
+            ts.createPropertyAccess(importCall, "default")
+          )
+        ])
+      );
+    }
+    if (bindings) {
       if (ts.isNamedImports(bindings)) {
         // import { a, b } from "aa"
         // -> const {a, b} = tsb.import("typescript");
@@ -92,22 +96,26 @@ export class Transformer {
             return ts.createBindingElement(undefined, undefined, v.name);
           }
         });
-        return ts.createVariableStatement(undefined, [
-          ts.createVariableDeclaration(
-            ts.createObjectBindingPattern(elements),
-            undefined,
-            importCall
-          )
-        ]);
+        ret.push(
+          ts.createVariableStatement(undefined, [
+            ts.createVariableDeclaration(
+              ts.createObjectBindingPattern(elements),
+              undefined,
+              importCall
+            )
+          ])
+        );
       } else if (ts.isNamespaceImport(bindings)) {
         // import * as ts from "typescript"
         // -> const ts = tsb.import("typescript");
-        return ts.createVariableStatement(undefined, [
-          ts.createVariableDeclaration(bindings.name, undefined, importCall)
-        ]);
+        ret.push(
+          ts.createVariableStatement(undefined, [
+            ts.createVariableDeclaration(bindings.name, undefined, importCall)
+          ])
+        );
       }
     }
-    throw "a";
+    return ret;
   }
 
   transformDynamicImport(node: ts.CallExpression): ts.Node {

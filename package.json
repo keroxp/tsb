@@ -12,7 +12,8 @@
   "license": "MIT",
   "scripts": {
     "build": "tsc",
-    "fmt": "prettier --write '**/*.ts'"
+    "fmt": "prettier --write '**/*.ts'",
+    "test": "jest --forceExit"
   },
   "jest": {
     "preset": "ts-jest"

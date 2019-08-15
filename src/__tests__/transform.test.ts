@@ -6,11 +6,13 @@ describe("transform", () => {
   const t = new Transformer("./example.ts", (moduleId, dep) => {
     return dep;
   });
+
   function transform(text: string): string {
     const src = ts.createSourceFile("example.ts", text, ts.ScriptTarget.ESNext);
     const result = ts.transform(src, t.transformers());
     return printer.printFile(result.transformed[0] as ts.SourceFile);
   }
+
   describe("import", () => {
     test("namedImport(relative)", () => {
       const res = transform(`import { a } from "./some.ts";\n`);
@@ -46,6 +48,28 @@ describe("transform", () => {
       );
       expect(res).toBe(
         `var http = tsb.import("https://deno.land/std/http/server.ts").default;\n`
+      );
+    });
+    test("default + namedImport", () => {
+      const res = transform(
+        `import http, { some, other as doOther } from "https://deno.land/std/http/server.ts";\n`
+      );
+      // prettier-ignore
+      expect(res).toBe(
+`var http = tsb.import("https://deno.land/std/http/server.ts").default;
+var { some, other: doOther } = tsb.import("https://deno.land/std/http/server.ts");
+`
+      );
+    });
+    test("default + namespace", () => {
+      const res = transform(
+        `import http, * as all from "https://deno.land/std/http/server.ts";\n`
+      );
+      // prettier-ignore
+      expect(res).toBe(
+`var http = tsb.import("https://deno.land/std/http/server.ts").default;
+var all = tsb.import("https://deno.land/std/http/server.ts");
+`
       );
     });
     test("dynamic", () => {

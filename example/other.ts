@@ -5,3 +5,7 @@ export function callOther(): string {
 export function callNever(): string {
   return "never";
 }
+
+export default function() {
+  return "default";
+}
