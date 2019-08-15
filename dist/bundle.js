@@ -86,6 +86,12 @@ function traverseDependencyTree(sourceFile, dependencyTree, redirectionMap) {
                 const dependency = node.moduleSpecifier.text;
                 dependencies.push(dependency);
             }
+            else if (ts.isCallExpression(node) &&
+                node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+                // import("aa").then(v => {})
+                const dependency = node.arguments[0].text;
+                dependencies.push(dependency);
+            }
             else if (ts.isExportDeclaration(node)) {
                 const exportClause = node.exportClause;
                 const module = node.moduleSpecifier;
@@ -102,6 +108,7 @@ function traverseDependencyTree(sourceFile, dependencyTree, redirectionMap) {
                     dependencies.push(module.text);
                 }
             }
+            ts.forEachChild(node, visit);
         };
         const resolvedPath = yield resolveUri(id);
         const text = yield readFileAsync(resolvedPath);
@@ -195,7 +202,10 @@ function bundle(entry) {
                 return ret;
             }
             else {
-                return url.resolve(redirection, dep);
+                return normalizeModuleId({
+                    canonicalParentName: moduleId,
+                    canonicalName: dep
+                });
             }
         };
         const modules = [];

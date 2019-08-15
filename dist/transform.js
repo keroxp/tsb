@@ -5,6 +5,9 @@ const ts = require("typescript");
 function createTsbImportAccess() {
     return ts.createPropertyAccess(ts.createIdentifier("tsb"), "import");
 }
+function createTsbImportDynamicAccess() {
+    return ts.createPropertyAccess(ts.createIdentifier("tsb"), "importDynamic");
+}
 function createTsbExportAccess() {
     return ts.createPropertyAccess(ts.createIdentifier("tsb"), "exports");
 }
@@ -38,6 +41,9 @@ class Transformer {
                 }
                 else if (ts.isEnumDeclaration(node)) {
                     return this.transformExportEnumDeclaration(node);
+                }
+                else if (ts.isCallExpression(node)) {
+                    return this.transformDynamicImport(node);
                 }
                 return node;
             };
@@ -89,6 +95,15 @@ class Transformer {
             }
         }
         throw "a";
+    }
+    transformDynamicImport(node) {
+        if (node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+            const module = node.arguments[0];
+            return ts.createCall(createTsbImportDynamicAccess(), node.typeArguments, [
+                ts.createStringLiteral(this.normalizeModuleSpecifier(module.text))
+            ]);
+        }
+        return node;
     }
     transformExportDeclaration(node) {
         const exportClause = node.exportClause;
