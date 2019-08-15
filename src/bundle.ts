@@ -199,7 +199,11 @@ export async function bundle(entry: string) {
   const modules: string[] = [];
   for (const [moduleId, sourceFile] of tree.entries()) {
     const transformer = new Transformer(moduleId, resolveModule);
-    const text = await readFileAsync(await resolveUri(moduleId));
+    let text = await readFileAsync(await resolveUri(moduleId));
+    if (text.startsWith("#!")) {
+      // disable shell
+      text = "//"+text;
+    }
     const src = ts.createSourceFile(moduleId, text, ts.ScriptTarget.ESNext);
     const result = ts.transform(src, transformer.transformers());
     const transformed = printer.printFile(result
