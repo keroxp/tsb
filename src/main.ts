@@ -5,7 +5,7 @@ import { bundle } from "./bundle";
 
 caporal
   .name("tsb")
-  .version("0.2.2")
+  .version("0.2.3")
   .argument("file", "entry file path for bundle")
   .action(action);
 

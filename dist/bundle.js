@@ -16,7 +16,7 @@ const fs = require("fs");
 const ts = require("typescript");
 const cacheDir = require("cachedir");
 exports.kUriRegex = /^(https?):\/\/(.+?)$/;
-exports.kRelativeRegex = /^\.?\.?\/.+?\.ts$/;
+exports.kRelativeRegex = /^\.\.?\/.+?\.ts$/;
 function readFileAsync(file) {
     return __awaiter(this, void 0, void 0, function* () {
         return new Promise((resolve, reject) => {
@@ -76,7 +76,7 @@ function traverseDependencyTree(sourceFile, dependencyTree, redirectionMap) {
         const dependencies = [];
         let id;
         id = yield resolveModuleId(sourceFile);
-        redirectionMap.set(normalizeModuleId(sourceFile), id);
+        redirectionMap.set(joinModuleId(sourceFile), id);
         if (dependencyTree.has(id)) {
             return;
         }
@@ -115,59 +115,64 @@ function traverseDependencyTree(sourceFile, dependencyTree, redirectionMap) {
         const src = ts.createSourceFile(resolvedPath, text, ts.ScriptTarget.ESNext);
         ts.forEachChild(src, visit);
         for (const dependency of dependencies) {
-            yield traverseDependencyTree({ canonicalName: dependency, canonicalParentName: id }, dependencyTree, redirectionMap);
+            yield traverseDependencyTree({ dependency: dependency, moduleId: id }, dependencyTree, redirectionMap);
         }
     });
 }
-function normalizeModuleId(source) {
-    if (source.canonicalName.match(exports.kUriRegex)) {
-        return source.canonicalName;
+function joinModuleId(source) {
+    if (source.dependency.match(exports.kUriRegex)) {
+        // url
+        return source.dependency;
     }
-    else if (source.canonicalParentName.match(exports.kUriRegex)) {
+    else if (source.moduleId.match(exports.kUriRegex)) {
         // url + relative
-        return url.resolve(source.canonicalParentName, source.canonicalName);
+        return url.resolve(source.moduleId, source.dependency);
     }
-    else {
+    else if (source.dependency.match(exports.kRelativeRegex)) {
         // relative + relative
         const cwd = process.cwd();
-        const dir = path.dirname(source.canonicalParentName);
-        return "./" + path.relative(cwd, path.join(dir, source.canonicalName));
+        const dir = path.dirname(source.moduleId);
+        return "./" + path.relative(cwd, path.join(dir, source.dependency));
+    }
+    else {
+        throw new Error(`dependency must be URL or start with ./ or ../: ${source.dependency}`);
     }
 }
-exports.normalizeModuleId = normalizeModuleId;
+exports.joinModuleId = joinModuleId;
 function resolveModuleId(source) {
     return __awaiter(this, void 0, void 0, function* () {
         let m;
-        if ((m = source.canonicalName.match(exports.kUriRegex))) {
-            // import("https://...")
+        if ((m = source.dependency.match(exports.kUriRegex))) {
+            // any + url
             const [_, scheme, pathname] = m;
             const cachePath = path.join(cacheDir("deno"), `deps/${scheme}/${pathname}`);
             if (!(yield fileExists(cachePath))) {
                 if (!(yield fileExists(cachePath + ".headers.json"))) {
-                    throw new Error("not found: " + source.canonicalName);
+                    throw new Error(`
+        Cache file for "${source.moduleId}" + "${source.dependency}" was not found in: ${cachePath}. 
+        This typically means that you need to run "deno fetch" for the entry file. 
+        `);
                 }
                 const { redirect_to } = JSON.parse(yield readFileAsync(cachePath + ".headers.json"));
                 return resolveModuleId({
-                    canonicalParentName: ".",
-                    canonicalName: redirect_to
+                    moduleId: ".",
+                    dependency: redirect_to
                 });
             }
             else {
-                return source.canonicalName;
+                return source.dependency;
             }
         }
-        else if (source.canonicalParentName.match(exports.kUriRegex)) {
+        else if (source.moduleId.match(exports.kUriRegex)) {
             // url + relative
             return resolveModuleId({
-                canonicalParentName: ".",
-                canonicalName: url.resolve(source.canonicalParentName, source.canonicalName)
+                moduleId: ".",
+                dependency: url.resolve(source.moduleId, source.dependency)
             });
         }
         else {
             // relative + relative
-            const cwd = process.cwd();
-            const dir = path.dirname(source.canonicalParentName);
-            return "./" + path.relative(cwd, path.join(dir, source.canonicalName));
+            return joinModuleId(source);
         }
     });
 }
@@ -184,8 +189,8 @@ function bundle(entry) {
             canonicalName = "./" + path.relative(process.cwd(), entry);
         }
         yield traverseDependencyTree({
-            canonicalName,
-            canonicalParentName: "."
+            dependency: canonicalName,
+            moduleId: "."
         }, tree, redirectionMap);
         const printer = ts.createPrinter();
         let template = yield readFileAsync(path.resolve(__dirname, "../template/template.ts"));
@@ -202,14 +207,14 @@ function bundle(entry) {
                 return ret;
             }
             else {
-                return normalizeModuleId({
-                    canonicalParentName: moduleId,
-                    canonicalName: dep
+                return joinModuleId({
+                    moduleId: moduleId,
+                    dependency: dep
                 });
             }
         };
         const modules = [];
-        for (const [moduleId, sourceFile] of tree.entries()) {
+        for (const [moduleId] of tree.entries()) {
             const transformer = new transform_1.Transformer(moduleId, resolveModule);
             let text = yield readFileAsync(yield resolveUri(moduleId));
             if (text.startsWith("#!")) {
@@ -235,7 +240,7 @@ function bundle(entry) {
         }
         const body = `${modules.join(",")}`;
         template = template.replace("/*{@modules}*/", body);
-        template = template.replace("{@entryId}", yield resolveModuleId({ canonicalName: entry, canonicalParentName: "." }));
+        template = template.replace("{@entryId}", yield resolveModuleId({ dependency: canonicalName, moduleId: "." }));
         const output = ts.transpile(template, {
             target: ts.ScriptTarget.ESNext
         });
