@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 // Copyright 2019 Yusuke Sakurai. All rights reserved. MIT license.
 import * as caporal from "caporal";
 import { bundle } from "./bundle";
