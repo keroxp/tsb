@@ -180,7 +180,9 @@ export async function bundle(entry: string) {
     redirectionMap
   );
   const printer = ts.createPrinter();
-  let template = await readFileAsync(path.resolve(__dirname, "template.ts"));
+  let template = await readFileAsync(
+    path.resolve(__dirname, "../template/template.ts")
+  );
   const resolveModule = (moduleId: string, dep: string): string => {
     const redirection = redirectionMap.get(moduleId);
     if (!redirection) {
@@ -202,7 +204,7 @@ export async function bundle(entry: string) {
     let text = await readFileAsync(await resolveUri(moduleId));
     if (text.startsWith("#!")) {
       // disable shell
-      text = "//"+text;
+      text = "//" + text;
     }
     const src = ts.createSourceFile(moduleId, text, ts.ScriptTarget.ESNext);
     const result = ts.transform(src, transformer.transformers());

@@ -1,13 +1,17 @@
 // Copyright 2019 Yusuke Sakurai. All rights reserved. MIT license.
+import * as caporal from "caporal";
 import { bundle } from "./bundle";
 
-async function action() {
-  const entry = process.argv[process.argv.length - 1];
-  if (!entry) {
-    console.error("file path not provided");
-    process.exit(1);
-  }
-  await bundle(entry);
+caporal
+  .name("tsb")
+  .version("0.1.0")
+  .argument("file", "entry file path for bundle")
+  .action(action);
+
+async function action(args: { file: string }) {
+  await bundle(args.file);
 }
 
-action();
+if (require.main) {
+  caporal.parse(process.argv);
+}

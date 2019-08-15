@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "target": "esnext",
+    "target": "es2015",
     "module": "commonjs",
     "moduleResolution": "node",
     "baseUrl": "/Users/keroxp/src/servest",
@@ -9,6 +9,9 @@
       "https://*": ["/Users/keroxp/Library/Caches/deno/deps/https/*"],
       "http://*": ["/Users/keroxp/Library/Caches/deno/deps/http/*"]
     },
+    "outDir": "dist",
     "strictNullChecks": true
-  }
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.test.ts"]
 }
