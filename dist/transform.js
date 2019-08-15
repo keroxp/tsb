@@ -71,14 +71,15 @@ class Transformer {
         const importCall = ts.createCall(createTsbImportAccess(), undefined, [
             args
         ]);
+        const ret = [];
         if (importName) {
             // import a from "aa"
             // -> const a = __tsbImport("aa").default
-            return ts.createVariableStatement(undefined, [
+            ret.push(ts.createVariableStatement(undefined, [
                 ts.createVariableDeclaration(importName, undefined, ts.createPropertyAccess(importCall, "default"))
-            ]);
+            ]));
         }
-        else if (bindings) {
+        if (bindings) {
             if (ts.isNamedImports(bindings)) {
                 // import { a, b } from "aa"
                 // -> const {a, b} = tsb.import("typescript");
@@ -90,19 +91,19 @@ class Transformer {
                         return ts.createBindingElement(undefined, undefined, v.name);
                     }
                 });
-                return ts.createVariableStatement(undefined, [
+                ret.push(ts.createVariableStatement(undefined, [
                     ts.createVariableDeclaration(ts.createObjectBindingPattern(elements), undefined, importCall)
-                ]);
+                ]));
             }
             else if (ts.isNamespaceImport(bindings)) {
                 // import * as ts from "typescript"
                 // -> const ts = tsb.import("typescript");
-                return ts.createVariableStatement(undefined, [
+                ret.push(ts.createVariableStatement(undefined, [
                     ts.createVariableDeclaration(bindings.name, undefined, importCall)
-                ]);
+                ]));
             }
         }
-        throw "a";
+        return ret;
     }
     transformDynamicImport(node) {
         if (node.expression.kind === ts.SyntaxKind.ImportKeyword) {

@@ -14,7 +14,7 @@ const caporal = require("caporal");
 const bundle_1 = require("./bundle");
 caporal
     .name("tsb")
-    .version("0.2.3")
+    .version("0.2.4")
     .argument("file", "entry file path for bundle")
     .action(action);
 function action(args) {
