@@ -11,6 +11,9 @@ function createTsbImportDynamicAccess() {
 function createTsbExportAccess() {
     return ts.createPropertyAccess(ts.createIdentifier("tsb"), "exports");
 }
+function createTsbResolveCall(module, dep) {
+    return ts.createCall(ts.createPropertyAccess(ts.createIdentifier("tsb"), "resolveModule"), undefined, [ts.createStringLiteral(module), dep]);
+}
 class Transformer {
     constructor(moduleId, moduleResolver) {
         this.moduleId = moduleId;
@@ -107,9 +110,16 @@ class Transformer {
     }
     transformDynamicImport(node) {
         if (node.expression.kind === ts.SyntaxKind.ImportKeyword) {
-            const module = node.arguments[0];
+            const [module] = node.arguments;
+            let moduleSpecifier;
+            if (ts.isStringLiteral(module)) {
+                moduleSpecifier = ts.createStringLiteral(this.normalizeModuleSpecifier(module.text));
+            }
+            else {
+                moduleSpecifier = createTsbResolveCall(this.moduleId, module);
+            }
             return ts.createCall(createTsbImportDynamicAccess(), node.typeArguments, [
-                ts.createStringLiteral(this.normalizeModuleSpecifier(module.text))
+                moduleSpecifier
             ]);
         }
         return node;

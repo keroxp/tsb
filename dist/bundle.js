@@ -89,8 +89,10 @@ function traverseDependencyTree(sourceFile, dependencyTree, redirectionMap) {
             else if (ts.isCallExpression(node) &&
                 node.expression.kind === ts.SyntaxKind.ImportKeyword) {
                 // import("aa").then(v => {})
-                const dependency = node.arguments[0].text;
-                dependencies.push(dependency);
+                const [module] = node.arguments;
+                if (ts.isStringLiteral(module)) {
+                    dependencies.push(module.text);
+                }
             }
             else if (ts.isExportDeclaration(node)) {
                 const exportClause = node.exportClause;
@@ -135,10 +137,13 @@ function joinModuleId(source) {
         return "./" + path.relative(cwd, path.join(dir, source.dependency));
     }
     else {
-        throw new Error(`dependency must be URL or start with ./ or ../: ${source.dependency}`);
+        throw createError(source, `dependency must be URL or start with ./ or ../`);
     }
 }
 exports.joinModuleId = joinModuleId;
+function createError(source, message) {
+    return new Error(`moduleId: "${source.moduleId}", dependency: "${source.dependency}": ${message}`);
+}
 function resolveModuleId(source) {
     return __awaiter(this, void 0, void 0, function* () {
         let m;
@@ -148,8 +153,8 @@ function resolveModuleId(source) {
             const cachePath = path.join(cacheDir("deno"), `deps/${scheme}/${pathname}`);
             if (!(yield fileExists(cachePath))) {
                 if (!(yield fileExists(cachePath + ".headers.json"))) {
-                    throw new Error(`
-        Cache file for "${source.moduleId}" + "${source.dependency}" was not found in: ${cachePath}. 
+                    throw createError(source, `
+        Cache file was not found in: ${cachePath}. 
         This typically means that you need to run "deno fetch" for the entry file. 
         `);
                 }
