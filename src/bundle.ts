@@ -87,8 +87,10 @@ async function traverseDependencyTree(
       node.expression.kind === ts.SyntaxKind.ImportKeyword
     ) {
       // import("aa").then(v => {})
-      const dependency = (node.arguments[0] as ts.StringLiteral).text;
-      dependencies.push(dependency);
+      const [module] = node.arguments;
+      if (ts.isStringLiteral(module)) {
+        dependencies.push(module.text);
+      }
     } else if (ts.isExportDeclaration(node)) {
       const exportClause = node.exportClause;
       const module = node.moduleSpecifier;
@@ -132,10 +134,14 @@ export function joinModuleId(source: SourceFile): string {
     const dir = path.dirname(source.moduleId);
     return "./" + path.relative(cwd, path.join(dir, source.dependency));
   } else {
-    throw new Error(
-      `dependency must be URL or start with ./ or ../: ${source.dependency}`
-    );
+    throw createError(source, `dependency must be URL or start with ./ or ../`);
   }
+}
+
+function createError(source: SourceFile, message: string): Error {
+  return new Error(
+    `moduleId: "${source.moduleId}", dependency: "${source.dependency}": ${message}`
+  );
 }
 
 export async function resolveModuleId(source: SourceFile): Promise<string> {
@@ -146,10 +152,13 @@ export async function resolveModuleId(source: SourceFile): Promise<string> {
     const cachePath = path.join(cacheDir("deno"), `deps/${scheme}/${pathname}`);
     if (!(await fileExists(cachePath))) {
       if (!(await fileExists(cachePath + ".headers.json"))) {
-        throw new Error(`
-        Cache file for "${source.moduleId}" + "${source.dependency}" was not found in: ${cachePath}. 
+        throw createError(
+          source,
+          `
+        Cache file was not found in: ${cachePath}. 
         This typically means that you need to run "deno fetch" for the entry file. 
-        `);
+        `
+        );
       }
       const { redirect_to } = JSON.parse(
         await readFileAsync(cachePath + ".headers.json")

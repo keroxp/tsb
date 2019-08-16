@@ -10,6 +10,16 @@ function createTsbImportDynamicAccess(): ts.Expression {
 function createTsbExportAccess(): ts.Expression {
   return ts.createPropertyAccess(ts.createIdentifier("tsb"), "exports");
 }
+function createTsbResolveCall(
+  module: string,
+  dep: ts.Expression
+): ts.Expression {
+  return ts.createCall(
+    ts.createPropertyAccess(ts.createIdentifier("tsb"), "resolveModule"),
+    undefined,
+    [ts.createStringLiteral(module), dep]
+  );
+}
 export class Transformer {
   shouldMergeExport: boolean = false;
 
@@ -120,9 +130,17 @@ export class Transformer {
 
   transformDynamicImport(node: ts.CallExpression): ts.Node {
     if (node.expression.kind === ts.SyntaxKind.ImportKeyword) {
-      const module = node.arguments[0] as ts.StringLiteral;
+      const [module] = node.arguments;
+      let moduleSpecifier: ts.Expression;
+      if (ts.isStringLiteral(module)) {
+        moduleSpecifier = ts.createStringLiteral(
+          this.normalizeModuleSpecifier(module.text)
+        );
+      } else {
+        moduleSpecifier = createTsbResolveCall(this.moduleId, module);
+      }
       return ts.createCall(createTsbImportDynamicAccess(), node.typeArguments, [
-        ts.createStringLiteral(this.normalizeModuleSpecifier(module.text))
+        moduleSpecifier
       ]);
     }
     return node;
