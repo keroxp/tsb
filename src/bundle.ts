@@ -2,19 +2,17 @@
 import * as path from "path";
 import * as url from "url";
 import { Transformer } from "./transform";
-import * as fs from "fs";
+import * as fs from "fs-extra";
 import * as ts from "typescript";
 import * as cacheDir from "cachedir";
+import { fetchModule } from "./fetch";
+import { CliOptions } from "./main";
 
 export const kUriRegex = /^(https?):\/\/(.+?)$/;
 export const kRelativeRegex = /^\.\.?\/.+?\.ts$/;
 
 async function readFileAsync(file: string): Promise<string> {
-  return new Promise<string>((resolve, reject) => {
-    fs.readFile(file, (err, data) => {
-      err ? reject(err) : resolve(String(data));
-    });
-  });
+  return String(await fs.readFile(file));
 }
 
 export type SourceFile = {
@@ -23,40 +21,16 @@ export type SourceFile = {
 };
 
 async function fileExists(p: string): Promise<boolean> {
-  return new Promise<boolean>((resolve, reject) => {
-    fs.stat(p, err => {
-      if (err) {
-        if (err.code === "ENOENT") {
-          return resolve(false);
-        } else {
-          reject(err);
-        }
-      } else {
-        resolve(true);
-      }
-    });
-  });
+  return fs.pathExists(p);
 }
 
 async function resolveUri(id: string): Promise<string> {
   let m: RegExpMatchArray | null;
   if ((m = id.match(kUriRegex))) {
     const [_, scheme, pathname] = m;
-    let ret = path.resolve(
+    return path.resolve(
       path.join(cacheDir("deno"), `deps/${scheme}/${pathname}`)
     );
-    if (!(await fileExists(ret))) {
-      ret = path.resolve(
-        path.join(cacheDir("deno"), `deps/${scheme}/${pathname}.headers.json`)
-      );
-      if (!(await fileExists(ret))) {
-        throw new Error("file not found: " + id + " " + ret);
-      }
-      const { redirect_to } = JSON.parse(await readFileAsync(ret));
-      return resolveUri(redirect_to);
-    } else {
-      return ret;
-    }
   } else if (id.match(kRelativeRegex)) {
     return path.resolve(id);
   } else {
@@ -64,14 +38,61 @@ async function resolveUri(id: string): Promise<string> {
   }
 }
 
+export async function resolveModuleId(
+  source: SourceFile,
+  skipFetch = false
+): Promise<string> {
+  let m: RegExpMatchArray | null;
+  if ((m = source.dependency.match(kUriRegex))) {
+    // any + url
+    const [_, scheme, pathname] = m;
+    const cachePath = path.join(cacheDir("deno"), `deps/${scheme}/${pathname}`);
+    if (!(await fileExists(cachePath))) {
+      if (!(await fileExists(cachePath + ".headers.json"))) {
+        if (!skipFetch) {
+          await fetchModule(source.dependency, cacheDir("deno"));
+          return resolveModuleId(source, false);
+        } else {
+          throw createError(
+            source,
+            `
+        Cache file was not found in: ${cachePath}. 
+        This typically means that you need to run "deno fetch" for the entry file. 
+        `
+          );
+        }
+      }
+      const { redirect_to } = JSON.parse(
+        await readFileAsync(cachePath + ".headers.json")
+      );
+      return resolveModuleId({
+        moduleId: ".",
+        dependency: redirect_to
+      });
+    } else {
+      return source.dependency;
+    }
+  } else if (source.moduleId.match(kUriRegex)) {
+    // url + relative
+    return resolveModuleId({
+      moduleId: ".",
+      dependency: url.resolve(source.moduleId, source.dependency)
+    });
+  } else {
+    // relative + relative
+    return joinModuleId(source);
+  }
+}
+
 async function traverseDependencyTree(
   sourceFile: SourceFile,
   dependencyTree: Map<string, SourceFile>,
-  redirectionMap: Map<string, string>
+  redirectionMap: Map<string, string>,
+  opts: CliOptions
 ): Promise<void> {
   const dependencies: string[] = [];
   let id: string;
-  id = await resolveModuleId(sourceFile);
+  id = await resolveModuleId(sourceFile, opts.skipFetch);
   redirectionMap.set(joinModuleId(sourceFile), id);
   if (dependencyTree.has(id)) {
     return;
@@ -116,7 +137,8 @@ async function traverseDependencyTree(
     await traverseDependencyTree(
       { dependency: dependency, moduleId: id },
       dependencyTree,
-      redirectionMap
+      redirectionMap,
+      opts
     );
   }
 }
@@ -144,45 +166,7 @@ function createError(source: SourceFile, message: string): Error {
   );
 }
 
-export async function resolveModuleId(source: SourceFile): Promise<string> {
-  let m: RegExpMatchArray | null;
-  if ((m = source.dependency.match(kUriRegex))) {
-    // any + url
-    const [_, scheme, pathname] = m;
-    const cachePath = path.join(cacheDir("deno"), `deps/${scheme}/${pathname}`);
-    if (!(await fileExists(cachePath))) {
-      if (!(await fileExists(cachePath + ".headers.json"))) {
-        throw createError(
-          source,
-          `
-        Cache file was not found in: ${cachePath}. 
-        This typically means that you need to run "deno fetch" for the entry file. 
-        `
-        );
-      }
-      const { redirect_to } = JSON.parse(
-        await readFileAsync(cachePath + ".headers.json")
-      );
-      return resolveModuleId({
-        moduleId: ".",
-        dependency: redirect_to
-      });
-    } else {
-      return source.dependency;
-    }
-  } else if (source.moduleId.match(kUriRegex)) {
-    // url + relative
-    return resolveModuleId({
-      moduleId: ".",
-      dependency: url.resolve(source.moduleId, source.dependency)
-    });
-  } else {
-    // relative + relative
-    return joinModuleId(source);
-  }
-}
-
-export async function bundle(entry: string) {
+export async function bundle(entry: string, opts: CliOptions) {
   const tree = new Map<string, SourceFile>();
   const redirectionMap = new Map<string, string>();
   let canonicalName: string;
@@ -197,7 +181,8 @@ export async function bundle(entry: string) {
       moduleId: "."
     },
     tree,
-    redirectionMap
+    redirectionMap,
+    opts
   );
   const printer = ts.createPrinter();
   let template = await readFileAsync(

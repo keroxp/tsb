@@ -7,10 +7,15 @@ caporal
   .name("tsb")
   .version("0.3.0")
   .argument("file", "entry file path for bundle")
+  .option("--skipFetch", "skip fetching remote module recursively")
   .action(action);
 
-async function action(args: { file: string }) {
-  await bundle(args.file);
+export type CliOptions = {
+  skipFetch: boolean;
+};
+
+async function action(args: { file: string }, opts: CliOptions) {
+  await bundle(args.file, opts);
 }
 
 if (require.main) {
