@@ -15,7 +15,13 @@ export type CliOptions = {
 };
 
 async function action(args: { file: string }, opts: CliOptions) {
-  await bundle(args.file, opts);
+  try {
+    await bundle(args.file, opts);
+  } catch (e) {
+    if (e instanceof Error) {
+      console.error(e.stack);
+    }
+  }
 }
 
 if (require.main) {

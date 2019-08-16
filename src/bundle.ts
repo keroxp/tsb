@@ -62,9 +62,8 @@ export async function resolveModuleId(
           );
         }
       }
-      const { redirect_to } = JSON.parse(
-        await readFileAsync(cachePath + ".headers.json")
-      );
+      const headers = await readFileAsync(cachePath + ".headers.json");
+      const { redirect_to } = JSON.parse(headers);
       return resolveModuleId({
         moduleId: ".",
         dependency: redirect_to
