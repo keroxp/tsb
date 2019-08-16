@@ -12,37 +12,20 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const path = require("path");
 const url = require("url");
 const transform_1 = require("./transform");
-const fs = require("fs");
+const fs = require("fs-extra");
 const ts = require("typescript");
 const cacheDir = require("cachedir");
+const fetch_1 = require("./fetch");
 exports.kUriRegex = /^(https?):\/\/(.+?)$/;
 exports.kRelativeRegex = /^\.\.?\/.+?\.ts$/;
 function readFileAsync(file) {
     return __awaiter(this, void 0, void 0, function* () {
-        return new Promise((resolve, reject) => {
-            fs.readFile(file, (err, data) => {
-                err ? reject(err) : resolve(String(data));
-            });
-        });
+        return String(yield fs.readFile(file));
     });
 }
 function fileExists(p) {
     return __awaiter(this, void 0, void 0, function* () {
-        return new Promise((resolve, reject) => {
-            fs.stat(p, err => {
-                if (err) {
-                    if (err.code === "ENOENT") {
-                        return resolve(false);
-                    }
-                    else {
-                        reject(err);
-                    }
-                }
-                else {
-                    resolve(true);
-                }
-            });
-        });
+        return fs.pathExists(p);
     });
 }
 function resolveUri(id) {
@@ -50,18 +33,7 @@ function resolveUri(id) {
         let m;
         if ((m = id.match(exports.kUriRegex))) {
             const [_, scheme, pathname] = m;
-            let ret = path.resolve(path.join(cacheDir("deno"), `deps/${scheme}/${pathname}`));
-            if (!(yield fileExists(ret))) {
-                ret = path.resolve(path.join(cacheDir("deno"), `deps/${scheme}/${pathname}.headers.json`));
-                if (!(yield fileExists(ret))) {
-                    throw new Error("file not found: " + id + " " + ret);
-                }
-                const { redirect_to } = JSON.parse(yield readFileAsync(ret));
-                return resolveUri(redirect_to);
-            }
-            else {
-                return ret;
-            }
+            return path.resolve(path.join(cacheDir("deno"), `deps/${scheme}/${pathname}`));
         }
         else if (id.match(exports.kRelativeRegex)) {
             return path.resolve(id);
@@ -71,11 +43,55 @@ function resolveUri(id) {
         }
     });
 }
-function traverseDependencyTree(sourceFile, dependencyTree, redirectionMap) {
+function resolveModuleId(source, skipFetch = false) {
+    return __awaiter(this, void 0, void 0, function* () {
+        let m;
+        if ((m = source.dependency.match(exports.kUriRegex))) {
+            // any + url
+            const [_, scheme, pathname] = m;
+            const cachePath = path.join(cacheDir("deno"), `deps/${scheme}/${pathname}`);
+            if (!(yield fileExists(cachePath))) {
+                if (!(yield fileExists(cachePath + ".headers.json"))) {
+                    if (!skipFetch) {
+                        yield fetch_1.fetchModule(source.dependency, cacheDir("deno"));
+                        return resolveModuleId(source, false);
+                    }
+                    else {
+                        throw createError(source, `
+        Cache file was not found in: ${cachePath}. 
+        This typically means that you need to run "deno fetch" for the entry file. 
+        `);
+                    }
+                }
+                const { redirect_to } = JSON.parse(yield readFileAsync(cachePath + ".headers.json"));
+                return resolveModuleId({
+                    moduleId: ".",
+                    dependency: redirect_to
+                });
+            }
+            else {
+                return source.dependency;
+            }
+        }
+        else if (source.moduleId.match(exports.kUriRegex)) {
+            // url + relative
+            return resolveModuleId({
+                moduleId: ".",
+                dependency: url.resolve(source.moduleId, source.dependency)
+            });
+        }
+        else {
+            // relative + relative
+            return joinModuleId(source);
+        }
+    });
+}
+exports.resolveModuleId = resolveModuleId;
+function traverseDependencyTree(sourceFile, dependencyTree, redirectionMap, opts) {
     return __awaiter(this, void 0, void 0, function* () {
         const dependencies = [];
         let id;
-        id = yield resolveModuleId(sourceFile);
+        id = yield resolveModuleId(sourceFile, opts.skipFetch);
         redirectionMap.set(joinModuleId(sourceFile), id);
         if (dependencyTree.has(id)) {
             return;
@@ -117,7 +133,7 @@ function traverseDependencyTree(sourceFile, dependencyTree, redirectionMap) {
         const src = ts.createSourceFile(resolvedPath, text, ts.ScriptTarget.ESNext);
         ts.forEachChild(src, visit);
         for (const dependency of dependencies) {
-            yield traverseDependencyTree({ dependency: dependency, moduleId: id }, dependencyTree, redirectionMap);
+            yield traverseDependencyTree({ dependency: dependency, moduleId: id }, dependencyTree, redirectionMap, opts);
         }
     });
 }
@@ -144,45 +160,7 @@ exports.joinModuleId = joinModuleId;
 function createError(source, message) {
     return new Error(`moduleId: "${source.moduleId}", dependency: "${source.dependency}": ${message}`);
 }
-function resolveModuleId(source) {
-    return __awaiter(this, void 0, void 0, function* () {
-        let m;
-        if ((m = source.dependency.match(exports.kUriRegex))) {
-            // any + url
-            const [_, scheme, pathname] = m;
-            const cachePath = path.join(cacheDir("deno"), `deps/${scheme}/${pathname}`);
-            if (!(yield fileExists(cachePath))) {
-                if (!(yield fileExists(cachePath + ".headers.json"))) {
-                    throw createError(source, `
-        Cache file was not found in: ${cachePath}. 
-        This typically means that you need to run "deno fetch" for the entry file. 
-        `);
-                }
-                const { redirect_to } = JSON.parse(yield readFileAsync(cachePath + ".headers.json"));
-                return resolveModuleId({
-                    moduleId: ".",
-                    dependency: redirect_to
-                });
-            }
-            else {
-                return source.dependency;
-            }
-        }
-        else if (source.moduleId.match(exports.kUriRegex)) {
-            // url + relative
-            return resolveModuleId({
-                moduleId: ".",
-                dependency: url.resolve(source.moduleId, source.dependency)
-            });
-        }
-        else {
-            // relative + relative
-            return joinModuleId(source);
-        }
-    });
-}
-exports.resolveModuleId = resolveModuleId;
-function bundle(entry) {
+function bundle(entry, opts) {
     return __awaiter(this, void 0, void 0, function* () {
         const tree = new Map();
         const redirectionMap = new Map();
@@ -196,7 +174,7 @@ function bundle(entry) {
         yield traverseDependencyTree({
             dependency: canonicalName,
             moduleId: "."
-        }, tree, redirectionMap);
+        }, tree, redirectionMap, opts);
         const printer = ts.createPrinter();
         let template = yield readFileAsync(path.resolve(__dirname, "../template/template.ts"));
         const resolveModule = (moduleId, dep) => {

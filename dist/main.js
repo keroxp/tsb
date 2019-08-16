@@ -14,12 +14,13 @@ const caporal = require("caporal");
 const bundle_1 = require("./bundle");
 caporal
     .name("tsb")
-    .version("0.3.0")
+    .version("0.4.0")
     .argument("file", "entry file path for bundle")
+    .option("--skipFetch", "skip fetching remote module recursively")
     .action(action);
-function action(args) {
+function action(args, opts) {
     return __awaiter(this, void 0, void 0, function* () {
-        yield bundle_1.bundle(args.file);
+        yield bundle_1.bundle(args.file, opts);
     });
 }
 if (require.main) {
