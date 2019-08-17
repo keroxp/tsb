@@ -5,11 +5,11 @@ import { Transformer } from "./transform";
 import * as fs from "fs-extra";
 import * as ts from "typescript";
 import * as cacheDir from "cachedir";
-import { fetchModule } from "./fetch";
+import { fetchModule, urlToCacheFilePath } from "./fetch";
 import { CliOptions } from "./main";
 
 export const kUriRegex = /^(https?):\/\/(.+?)$/;
-export const kRelativeRegex = /^\.\.?\/.+?\.ts$/;
+export const kRelativeRegex = /^\.\.?\/.+?\.[jt]sx?$/;
 
 async function readFileAsync(file: string): Promise<string> {
   return String(await fs.readFile(file));
@@ -25,12 +25,8 @@ async function fileExists(p: string): Promise<boolean> {
 }
 
 async function resolveUri(id: string): Promise<string> {
-  let m: RegExpMatchArray | null;
-  if ((m = id.match(kUriRegex))) {
-    const [_, scheme, pathname] = m;
-    return path.resolve(
-      path.join(cacheDir("deno"), `deps/${scheme}/${pathname}`)
-    );
+  if (id.match(kUriRegex)) {
+    return urlToCacheFilePath(id, cacheDir("deno"));
   } else if (id.match(kRelativeRegex)) {
     return path.resolve(id);
   } else {
@@ -42,11 +38,9 @@ export async function resolveModuleId(
   source: SourceFile,
   skipFetch = false
 ): Promise<string> {
-  let m: RegExpMatchArray | null;
-  if ((m = source.dependency.match(kUriRegex))) {
+  if (source.dependency.match(kUriRegex)) {
     // any + url
-    const [_, scheme, pathname] = m;
-    const cachePath = path.join(cacheDir("deno"), `deps/${scheme}/${pathname}`);
+    const cachePath = urlToCacheFilePath(source.dependency, cacheDir("deno"));
     if (!(await fileExists(cachePath))) {
       if (!(await fileExists(cachePath + ".headers.json"))) {
         if (!skipFetch) {
@@ -218,7 +212,8 @@ export async function bundle(entry: string, opts: CliOptions) {
     const transformed = printer.printFile(result
       .transformed[0] as ts.SourceFile);
     let body = ts.transpile(transformed, {
-      target: ts.ScriptTarget.ESNext
+      target: ts.ScriptTarget.ESNext,
+      jsx: ts.JsxEmit.React
     });
     if (transformer.shouldMergeExport) {
       body = `

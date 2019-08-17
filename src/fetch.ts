@@ -28,13 +28,16 @@ export async function fetchModule(
   url: string,
   cacheDirectory?: string
 ): Promise<void> {
+  const dest = urlToCacheFilePath(url, cacheDirectory || cacheDir("tsb"));
   console.error(`${green("Download")} ${url}`);
   const resp = await fetch(url, {
     method: "GET",
     redirect: "manual"
   });
-  const dest = urlToCacheFilePath(url, cacheDirectory || cacheDir("tsb"));
-  await fs.ensureDir(path.dirname(dest));
+  const dir = path.dirname(dest);
+  if (!(await fs.pathExists(dir))) {
+    await fs.ensureDir(dir);
+  }
   if (400 <= resp.status) {
     throw new Error(`fetch failed with status code ${resp.status}`);
   }
