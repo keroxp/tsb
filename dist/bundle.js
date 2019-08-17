@@ -9,7 +9,7 @@ const ts = require("typescript");
 const cacheDir = require("cachedir");
 const fetch_1 = require("./fetch");
 exports.kUriRegex = /^(https?):\/\/(.+?)$/;
-exports.kRelativeRegex = /^\.\.?\/.+?\.ts$/;
+exports.kRelativeRegex = /^\.\.?\/.+?\.[jt]sx?$/;
 async function readFileAsync(file) {
     return String(await fs.readFile(file));
 }
@@ -17,10 +17,8 @@ async function fileExists(p) {
     return fs.pathExists(p);
 }
 async function resolveUri(id) {
-    let m;
-    if ((m = id.match(exports.kUriRegex))) {
-        const [_, scheme, pathname] = m;
-        return path.resolve(path.join(cacheDir("deno"), `deps/${scheme}/${pathname}`));
+    if (id.match(exports.kUriRegex)) {
+        return fetch_1.urlToCacheFilePath(id, cacheDir("deno"));
     }
     else if (id.match(exports.kRelativeRegex)) {
         return path.resolve(id);
@@ -30,11 +28,9 @@ async function resolveUri(id) {
     }
 }
 async function resolveModuleId(source, skipFetch = false) {
-    let m;
-    if ((m = source.dependency.match(exports.kUriRegex))) {
+    if (source.dependency.match(exports.kUriRegex)) {
         // any + url
-        const [_, scheme, pathname] = m;
-        const cachePath = path.join(cacheDir("deno"), `deps/${scheme}/${pathname}`);
+        const cachePath = fetch_1.urlToCacheFilePath(source.dependency, cacheDir("deno"));
         if (!(await fileExists(cachePath))) {
             if (!(await fileExists(cachePath + ".headers.json"))) {
                 if (!skipFetch) {
@@ -191,7 +187,8 @@ async function bundle(entry, opts) {
         const transformed = printer.printFile(result
             .transformed[0]);
         let body = ts.transpile(transformed, {
-            target: ts.ScriptTarget.ESNext
+            target: ts.ScriptTarget.ESNext,
+            jsx: ts.JsxEmit.React
         });
         if (transformer.shouldMergeExport) {
             body = `

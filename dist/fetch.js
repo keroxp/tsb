@@ -23,13 +23,16 @@ const kAcceptableMimeTypes = [
     "text/typescript"
 ];
 async function fetchModule(url, cacheDirectory) {
+    const dest = urlToCacheFilePath(url, cacheDirectory || cacheDir("tsb"));
     console.error(`${colors_1.green("Download")} ${url}`);
     const resp = await node_fetch_1.default(url, {
         method: "GET",
         redirect: "manual"
     });
-    const dest = urlToCacheFilePath(url, cacheDirectory || cacheDir("tsb"));
-    await fs.ensureDir(path.dirname(dest));
+    const dir = path.dirname(dest);
+    if (!(await fs.pathExists(dir))) {
+        await fs.ensureDir(dir);
+    }
     if (400 <= resp.status) {
         throw new Error(`fetch failed with status code ${resp.status}`);
     }
