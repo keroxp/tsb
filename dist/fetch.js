@@ -2,19 +2,35 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const node_fetch_1 = require("node-fetch");
 const url_1 = require("url");
-const cacheDir = require("cachedir");
+const cachdir = require("cachedir");
 const path = require("path");
 const fs = require("fs-extra");
 const colors_1 = require("colors");
-function urlToCacheFilePath(url, cacheDirectory) {
+const crypto = require("crypto");
+const cacheDirectory = cachdir("tsb");
+function urlToCacheFilePath(url) {
     const u = new url_1.URL(url);
     if (!u.protocol.match(/^https?/)) {
         throw new Error("url must start with https?:" + url);
     }
+    const fullPath = u.pathname + u.search;
     const scheme = u.protocol.startsWith("https") ? "https" : "http";
-    return path.join(cacheDirectory, "deps", scheme, u.host, u.pathname);
+    const sha256 = crypto.createHash("sha256");
+    sha256.update(fullPath);
+    const fullPathHash = sha256.digest("hex");
+    // ~/Library/Caches/tsb/https/deno.land/{sha256hashOfUrl}
+    return path.join(cacheDirectory, scheme, u.host, fullPathHash);
 }
 exports.urlToCacheFilePath = urlToCacheFilePath;
+function urlToCacheMetaFilePath(url) {
+    // ~/Library/Caches/tsb/https/deno.land/{sha256hashOfUrl}.meta.json
+    return urlToCacheFilePath(url) + "meta.json";
+}
+exports.urlToCacheMetaFilePath = urlToCacheMetaFilePath;
+async function saveMetaFile(url, meta) {
+    const dest = urlToCacheMetaFilePath(url);
+    await fs.writeFile(dest, JSON.stringify(meta));
+}
 const kAcceptableMimeTypes = [
     "text/plain",
     "application/javascript",
@@ -22,8 +38,10 @@ const kAcceptableMimeTypes = [
     "application/typescript",
     "text/typescript"
 ];
-async function fetchModule(url, cacheDirectory) {
-    const dest = urlToCacheFilePath(url, cacheDirectory || cacheDir("tsb"));
+async function fetchModule(url) {
+    const u = new url_1.URL(url);
+    const originalPath = u.pathname + u.search;
+    const dest = urlToCacheFilePath(url);
     console.error(`${colors_1.green("Download")} ${url}`);
     const resp = await node_fetch_1.default(url, {
         method: "GET",
@@ -44,13 +62,19 @@ async function fetchModule(url, cacheDirectory) {
         await Promise.all([
             // TODO: pipe body stream
             fs.writeFile(dest, await resp.text()),
-            fs.writeFile(dest + ".headers.json", JSON.stringify({ mime_type: contentType }))
+            saveMetaFile(url, { mimeType: contentType, originalPath })
         ]);
     }
     else if (300 <= resp.status) {
-        const redirect_to = resp.headers.get("location");
-        await fs.writeFile(dest + ".headers.json", JSON.stringify({ redirect_to }));
-        return fetchModule(redirect_to, cacheDirectory);
+        const redirectTo = resp.headers.get("location");
+        if (!redirectTo) {
+            throw new Error("redirected response didn't has Location headers!");
+        }
+        await saveMetaFile(url, {
+            redirectTo,
+            originalPath
+        });
+        return fetchModule(redirectTo);
     }
 }
 exports.fetchModule = fetchModule;

@@ -6,7 +6,6 @@ const url = require("url");
 const transform_1 = require("./transform");
 const fs = require("fs-extra");
 const ts = require("typescript");
-const cacheDir = require("cachedir");
 const fetch_1 = require("./fetch");
 exports.kUriRegex = /^(https?):\/\/(.+?)$/;
 exports.kRelativeRegex = /^\.\.?\/.+?\.[jt]sx?$/;
@@ -18,7 +17,7 @@ async function fileExists(p) {
 }
 async function resolveUri(id) {
     if (id.match(exports.kUriRegex)) {
-        return fetch_1.urlToCacheFilePath(id, cacheDir("deno"));
+        return fetch_1.urlToCacheFilePath(id);
     }
     else if (id.match(exports.kRelativeRegex)) {
         return path.resolve(id);
@@ -30,21 +29,21 @@ async function resolveUri(id) {
 async function resolveModuleId(source, skipFetch = false) {
     if (source.dependency.match(exports.kUriRegex)) {
         // any + url
-        const cachePath = fetch_1.urlToCacheFilePath(source.dependency, cacheDir("deno"));
+        const cachePath = fetch_1.urlToCacheFilePath(source.dependency);
+        const cacheMetaPath = fetch_1.urlToCacheMetaFilePath(source.dependency);
         if (!(await fileExists(cachePath))) {
-            if (!(await fileExists(cachePath + ".headers.json"))) {
+            if (!(await fileExists(cacheMetaPath))) {
                 if (!skipFetch) {
-                    await fetch_1.fetchModule(source.dependency, cacheDir("deno"));
+                    await fetch_1.fetchModule(source.dependency);
                     return resolveModuleId(source, false);
                 }
                 else {
                     throw createError(source, `
         Cache file was not found in: ${cachePath}. 
-        This typically means that you need to run "deno fetch" for the entry file. 
         `);
                 }
             }
-            const headers = await readFileAsync(cachePath + ".headers.json");
+            const headers = await readFileAsync(cacheMetaPath);
             const { redirect_to } = JSON.parse(headers);
             return resolveModuleId({
                 moduleId: ".",
