@@ -1,12 +1,11 @@
-// Copyright 2019 Yusuke Sakurai. All rights reserved. MIT license.
-interface Tsb {
-  import(module: string): any;
-  importDynamic(module: string): Promise<any>;
-  resolveModule(moduleId: string, dep: string): string;
-  exports: any;
-  loaded: boolean;
-}
-((modules: { [id: string]: (tsb: Tsb) => void }, entryId: string) => {
+function __tsbEntry(modules: { [id: string]: (tsb) => void }, entryId: string) {
+  interface Tsb {
+    import(module: string): any;
+    importDynamic(module: string): Promise<any>;
+    resolveModule(moduleId: string, dep: string): string;
+    exports: any;
+    loaded: boolean;
+  }
   const installedModules: Map<string, Tsb> = new Map<string, Tsb>();
   const uriRegex = /^http?s:\/\//;
   const relativeRegex = /^\.\.?\/.+?\.[tj]s$/;
@@ -46,7 +45,8 @@ interface Tsb {
       exports: {}
     };
     installedModules.set(moduleId, module);
-    modules[moduleId].call(null, module);
+    // execute module in global context
+    modules[moduleId].call(this, module);
     module.loaded = true;
     return module.exports;
   }
@@ -62,9 +62,4 @@ interface Tsb {
     return importInternal(moduleId);
   }
   return tsbImport(entryId);
-})(
-  {
-    /*{@modules}*/
-  },
-  "{@entryId}"
-);
+}

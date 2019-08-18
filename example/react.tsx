@@ -9,4 +9,6 @@ const View = () => {
   )
 };
 
-ReactDOM.render(View, document.body);
+window.addEventListener("DOMContentLoaded", () => {
+  ReactDOM.render(<View />, document.body);
+});
