@@ -13,6 +13,6 @@ describe("fetch", () => {
       "118a6a93e2c6de545787b444e91ef3906f20688e4b47a55cb28f14a05e51dcab"
     );
     expect(res).toBe(exp);
-    expect(urlToCacheMetaFilePath(url)).toBe(exp + "meta.json");
+    expect(urlToCacheMetaFilePath(url)).toBe(exp + ".meta.json");
   });
 });
