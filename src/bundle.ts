@@ -4,8 +4,11 @@ import * as url from "url";
 import { Transformer } from "./transform";
 import * as fs from "fs-extra";
 import * as ts from "typescript";
-import * as cacheDir from "cachedir";
-import { fetchModule, urlToCacheFilePath } from "./fetch";
+import {
+  fetchModule,
+  urlToCacheFilePath,
+  urlToCacheMetaFilePath
+} from "./fetch";
 import { CliOptions } from "./main";
 
 export const kUriRegex = /^(https?):\/\/(.+?)$/;
@@ -26,7 +29,7 @@ async function fileExists(p: string): Promise<boolean> {
 
 async function resolveUri(id: string): Promise<string> {
   if (id.match(kUriRegex)) {
-    return urlToCacheFilePath(id, cacheDir("deno"));
+    return urlToCacheFilePath(id);
   } else if (id.match(kRelativeRegex)) {
     return path.resolve(id);
   } else {
@@ -40,23 +43,23 @@ export async function resolveModuleId(
 ): Promise<string> {
   if (source.dependency.match(kUriRegex)) {
     // any + url
-    const cachePath = urlToCacheFilePath(source.dependency, cacheDir("deno"));
+    const cachePath = urlToCacheFilePath(source.dependency);
+    const cacheMetaPath = urlToCacheMetaFilePath(source.dependency);
     if (!(await fileExists(cachePath))) {
-      if (!(await fileExists(cachePath + ".headers.json"))) {
+      if (!(await fileExists(cacheMetaPath))) {
         if (!skipFetch) {
-          await fetchModule(source.dependency, cacheDir("deno"));
+          await fetchModule(source.dependency);
           return resolveModuleId(source, false);
         } else {
           throw createError(
             source,
             `
         Cache file was not found in: ${cachePath}. 
-        This typically means that you need to run "deno fetch" for the entry file. 
         `
           );
         }
       }
-      const headers = await readFileAsync(cachePath + ".headers.json");
+      const headers = await readFileAsync(cacheMetaPath);
       const { redirect_to } = JSON.parse(headers);
       return resolveModuleId({
         moduleId: ".",

@@ -1,10 +1,21 @@
 tsb
 ===
-TypeScript module bundler for Deno
+TypeScript/JavaScript module bundler for ESModule 
 
 ## Description
 
-`tsb` is module bundler for Deno. It bundles TypeScript modules built with pure ESModule.
+`tsb` is module bundler for ECMAScript. It bundles TypeScript/JavaScript modules built with pure ESModule.
+
+## Concept
+
+- TypeScript first
+  - tsb bundles and compiles ts/js with TypeScript Compiler API
+- ESM only
+  - tsb only supports ECMAScript that is written with pure ESModule (import/export)
+  - CommonJS,AMD (require/exports) are not supported
+- URL import support
+  - tsb will automatically fetch URL import/export and bundles all dependencies.
+    
 
 ## Install
 
