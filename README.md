@@ -1,3 +1,5 @@
+[![npm version](https://badge.fury.io/js/%40keroxp%2Ftsb.svg)](https://badge.fury.io/js/%40keroxp%2Ftsb)
+
 tsb
 ===
 TypeScript/JavaScript module bundler for ESModule 
@@ -8,16 +10,20 @@ TypeScript/JavaScript module bundler for ESModule
 
 ## Concept
 
-- TypeScript first
-  - tsb bundles and compiles ts/js with TypeScript Compiler API
-- ESM only
-  - tsb only supports ECMAScript that is written with pure ESModule (import/export)
-  - CommonJS,AMD (require/exports) are not supported
-- URL import support
-  - tsb will automatically fetch URL import/export and bundles all dependencies.
-    
+- **TypeScript first**
+  - tsb bundles and transpiles ts/js files with TypeScript Compiler API
+- **ESM only**
+  - tsb only supports ECMAScript that are written with pure ESModule (import/export)
+  - CommonJS,AMD (require/exports) are **NOT supported**
+- **URL import support**
+  - tsb will automatically fetch URL import/export and bundles all dependencies and stores caches.
 
 ## Install
+Via yarn
+
+```bash
+$ yarn global add @keroxp/tsb
+```
 
 Via npm
 
@@ -33,9 +39,7 @@ $ npx @keroxp/tsb
 ## Usage
 
 ```bash
-$ deno fetch ./example/server.ts
 $ tsb ./example/server.ts > bundle.js
-$ deno -A bundle.js
 ```
 
 ## License
