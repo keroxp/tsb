@@ -27,15 +27,11 @@ export function urlToCacheMetaFilePath(url: string): string {
   return urlToCacheFilePath(url) + "meta.json";
 }
 
-export type CacheFileMetadata =
-  | {
-      redirectTo: string;
-      originalPath: string;
-    }
-  | {
-      mimeType: string;
-      originalPath: string;
-    };
+export type CacheFileMetadata = {
+  redirectTo?: string;
+  mimeType?: string;
+  originalPath: string;
+};
 
 async function saveMetaFile(
   url: string,

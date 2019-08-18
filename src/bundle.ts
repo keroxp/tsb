@@ -5,6 +5,7 @@ import { Transformer } from "./transform";
 import * as fs from "fs-extra";
 import * as ts from "typescript";
 import {
+  CacheFileMetadata,
   fetchModule,
   urlToCacheFilePath,
   urlToCacheMetaFilePath
@@ -60,10 +61,13 @@ export async function resolveModuleId(
         }
       }
       const headers = await readFileAsync(cacheMetaPath);
-      const { redirect_to } = JSON.parse(headers);
+      const meta = JSON.parse(headers) as CacheFileMetadata;
+      if (!meta.redirectTo) {
+        throw new Error(`meta file for ${source.dependency} may be broken`);
+      }
       return resolveModuleId({
         moduleId: ".",
-        dependency: redirect_to
+        dependency: meta.redirectTo
       });
     } else {
       return source.dependency;
