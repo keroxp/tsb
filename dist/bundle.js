@@ -200,11 +200,14 @@ async function bundle(entry, opts) {
       ${body}
       `;
         }
-        modules.push(`"${moduleId}": (tsb) => { ${body} }`);
+        modules.push(`"${moduleId}": function (tsb) { ${body} } `);
     }
-    const body = `${modules.join(",")}`;
-    template = template.replace("/*{@modules}*/", body);
-    template = template.replace("{@entryId}", await resolveModuleId({ dependency: canonicalName, moduleId: "." }));
+    const body = modules.join(",");
+    const entryId = await resolveModuleId({
+        dependency: canonicalName,
+        moduleId: "."
+    });
+    template = `(${template}).call(this, {${body}}, ${entryId})`;
     const output = ts.transpile(template, {
         target: ts.ScriptTarget.ESNext
     });
