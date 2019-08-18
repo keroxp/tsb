@@ -165,7 +165,7 @@ export class Transformer {
             propertyName
           );
         } else {
-          right = v.name;
+          right = ts.createIdentifier(propertyName);
         }
         return ts.createAssignment(
           ts.createPropertyAccess(createTsbExportAccess(), v.name.text),
