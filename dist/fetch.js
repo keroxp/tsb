@@ -24,7 +24,7 @@ function urlToCacheFilePath(url) {
 exports.urlToCacheFilePath = urlToCacheFilePath;
 function urlToCacheMetaFilePath(url) {
     // ~/Library/Caches/tsb/https/deno.land/{sha256hashOfUrl}.meta.json
-    return urlToCacheFilePath(url) + "meta.json";
+    return urlToCacheFilePath(url) + ".meta.json";
 }
 exports.urlToCacheMetaFilePath = urlToCacheMetaFilePath;
 async function saveMetaFile(url, meta) {
