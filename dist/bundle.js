@@ -44,10 +44,13 @@ async function resolveModuleId(source, skipFetch = false) {
                 }
             }
             const headers = await readFileAsync(cacheMetaPath);
-            const { redirect_to } = JSON.parse(headers);
+            const meta = JSON.parse(headers);
+            if (!meta.redirectTo) {
+                throw new Error(`meta file for ${source.dependency} may be broken`);
+            }
             return resolveModuleId({
                 moduleId: ".",
-                dependency: redirect_to
+                dependency: meta.redirectTo
             });
         }
         else {
