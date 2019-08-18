@@ -6,7 +6,7 @@ const caporal = require("caporal");
 const bundle_1 = require("./bundle");
 caporal
     .name("tsb")
-    .version("0.5.2")
+    .version("0.5.3")
     .argument("file", "entry file path for bundle")
     .option("--skipFetch", "skip fetching remote module recursively")
     .action(action);
