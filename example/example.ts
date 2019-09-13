@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@v0.15.0/http/server.ts";
 import { cyan } from "https://deno.land/std@v0.15.0/colors/mod.ts";
 import some from "./some.ts";
 import { callOther, callNever as callAnother, callNever } from "./other.ts";

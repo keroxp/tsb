@@ -8,10 +8,12 @@ caporal
   .version("0.7.1")
   .argument("file", "entry file path for bundle")
   .option("--skipFetch", "skip fetching remote module recursively")
+  .option("-p,--project <project>", "tsconfig.json path", undefined, "./tsconfig.json")
   .action(action);
 
 export type CliOptions = {
   skipFetch: boolean;
+  project: string
 };
 
 async function action(args: { file: string }, opts: CliOptions) {

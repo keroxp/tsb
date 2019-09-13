@@ -7,7 +7,6 @@ import { green } from "colors";
 import * as crypto from "crypto";
 
 const cacheDirectory = cachdir("tsb");
-
 export function urlToCacheFilePath(url: string): string {
   const u = new URL(url);
   if (!u.protocol.match(/^https?/)) {
@@ -18,8 +17,9 @@ export function urlToCacheFilePath(url: string): string {
   const sha256 = crypto.createHash("sha256");
   sha256.update(fullPath);
   const fullPathHash = sha256.digest("hex");
+  const ext = path.extname(url) || ".js";
   // ~/Library/Caches/tsb/https/deno.land/{sha256hashOfUrl}
-  return path.join(cacheDirectory, scheme, u.host, fullPathHash);
+  return path.join(cacheDirectory, scheme, u.host, fullPathHash+ext);
 }
 
 export function urlToCacheMetaFilePath(url: string): string {
@@ -52,12 +52,12 @@ const kAcceptableMimeTypes = [
 export async function fetchModule(url: string): Promise<void> {
   const u = new URL(url);
   const originalPath = u.pathname + u.search;
-  const dest = urlToCacheFilePath(url);
   console.error(`${green("Download")} ${url}`);
   const resp = await fetch(url, {
     method: "GET",
     redirect: "manual"
   });
+  const dest = urlToCacheFilePath(url);
   const dir = path.dirname(dest);
   if (!(await fs.pathExists(dir))) {
     await fs.ensureDir(dir);

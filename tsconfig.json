@@ -2,7 +2,6 @@
   "compilerOptions": {
     "target": "es2018",
     "module": "commonjs",
-    "moduleResolution": "node",
     "baseUrl": "/Users/keroxp/src/servest",
     "paths": {
       "deno": ["./deno.d.ts"],
@@ -10,7 +9,8 @@
       "http://*": ["/Users/keroxp/Library/Caches/deno/deps/http/*"]
     },
     "outDir": "dist",
-    "strictNullChecks": true
+    "strictNullChecks": true,
+    "lib": ["dom", "esnext"]
   },
   "include": ["src/**/*.ts"],
   "exclude": ["src/**/*.test.ts"]
