@@ -84,7 +84,7 @@ var all = tsb.import("https://deno.land/std/http/server.ts");
   describe("export", () => {
     test("named", () => {
       const res = transform(`export { Hoge }`);
-      expect(res).toBe("tsb.exports.Hoge = Hoge\n");
+      expect(res).toBe("__export({ Hoge })\n");
     });
     test("default", () => {
       const res = transform("export default 1");
@@ -121,6 +121,22 @@ var all = tsb.import("https://deno.land/std/http/server.ts");
     test("assignment", () => {
       const res = transform(`export * from "./other.ts"`);
       expect(res).toBe(`__export(tsb.import("./other.ts"))\n`);
+    });
+    test("named with module specifier", () => {
+      const res = transform(`export { Hoge, Fuga as fuga } from "hoge"`);
+      expect(res).toBe(
+        `__export(tsb.import("hoge"), { "Hoge": "Hoge", "Fuga": "fuga" })\n`
+      );
+    });
+    test("default with module specifier", () => {
+      const res = transform(`export { default } from "hoge"`);
+      expect(res).toBe(
+        `__export(tsb.import("hoge"), { "default": "default" })\n`
+      );
+    });
+    test("equal", () => {
+      const res = transform("export = {}");
+      expect(res).toBe("tsb.exports = {}\n");
     });
   });
 });

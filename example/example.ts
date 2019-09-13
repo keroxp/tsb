@@ -23,5 +23,4 @@ enum Hoge {
 export { Hoge };
 export let variable, variable2;
 
-console.log(variable);
 console.log(cyan(callOther() + ":" + callNever()));

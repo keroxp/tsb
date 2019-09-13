@@ -22,6 +22,7 @@ function createTsbResolveCall(
 }
 export class Transformer {
   shouldMergeExport: boolean = false;
+  hasDynamicImport = false;
 
   constructor(
     readonly moduleId: string,
@@ -130,6 +131,7 @@ export class Transformer {
 
   transformDynamicImport(node: ts.CallExpression): ts.Node {
     if (node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+      this.hasDynamicImport = true;
       const [module] = node.arguments;
       let moduleSpecifier: ts.Expression;
       if (ts.isStringLiteral(module)) {
@@ -146,36 +148,54 @@ export class Transformer {
     return node;
   }
 
-  transformExportDeclaration(node: ts.ExportDeclaration): ts.Node {
+  transformExportDeclaration(
+    node: ts.ExportDeclaration
+  ): ts.VisitResult<ts.Node> {
+    this.shouldMergeExport = true;
     const exportClause = node.exportClause;
     const module = node.moduleSpecifier;
     if (exportClause) {
-      const exprs = exportClause.elements.map(v => {
-        let propertyName: string = v.name.text;
-        if (v.propertyName) {
-          propertyName = v.propertyName.text;
-        }
-        let right: ts.Expression;
-        if (module) {
-          const text = (module as ts.StringLiteral).text;
-          right = ts.createPropertyAccess(
-            ts.createCall(createTsbImportAccess(), undefined, [
-              ts.createStringLiteral(this.normalizeModuleSpecifier(text))
-            ]),
-            propertyName
+      if (module) {
+        const keyMap = exportClause.elements.map(v => {
+          let propertyName: string = v.name.text;
+          if (v.propertyName) {
+            propertyName = v.propertyName.text;
+          }
+          return ts.createPropertyAssignment(
+            ts.createStringLiteral(propertyName),
+            ts.createStringLiteral(v.name.text)
           );
-        } else {
-          right = ts.createIdentifier(propertyName);
-        }
-        return ts.createAssignment(
-          ts.createPropertyAccess(createTsbExportAccess(), v.name.text),
-          right
-        );
-      });
-      return ts.createCommaList(exprs);
+        });
+        // export {a, b as B} from "..."
+        // =>  __export(require("..."), {"a": "a", "b": "B"})
+        const text = (module as ts.StringLiteral).text;
+        return ts.createCall(ts.createIdentifier("__export"), undefined, [
+          ts.createCall(createTsbImportAccess(), undefined, [
+            ts.createStringLiteral(this.normalizeModuleSpecifier(text))
+          ]),
+          ts.createObjectLiteral(keyMap)
+        ]);
+      } else {
+        const assignments = exportClause.elements.map(v => {
+          let propertyName: string = v.name.text;
+          if (v.propertyName) {
+            propertyName = v.propertyName.text;
+            return ts.createPropertyAssignment(
+              propertyName,
+              ts.createIdentifier(v.name.text)
+            );
+          } else {
+            return ts.createShorthandPropertyAssignment(propertyName);
+          }
+        });
+        // export { a, b as B}
+        // => __export({a, B: b})
+        return ts.createCall(ts.createIdentifier("__export"), undefined, [
+          ts.createObjectLiteral(assignments)
+        ]);
+      }
     } else {
       const text = (module as ts.StringLiteral).text;
-      this.shouldMergeExport = true;
       return ts.createCall(ts.createIdentifier("__export"), undefined, [
         ts.createCall(createTsbImportAccess(), undefined, [
           ts.createStringLiteral(this.normalizeModuleSpecifier(text))
@@ -187,11 +207,11 @@ export class Transformer {
   transformExportAssignment(node: ts.ExportAssignment): ts.Node {
     if (node.isExportEquals) {
       // export = {}
-      // -> tsb.export = {}
+      // -> tsb.exports = {}
       return ts.createAssignment(createTsbExportAccess(), node.expression);
     } else {
       // export default {}
-      // -> tsb.export.default = {}
+      // -> tsb.exports.default = {}
       const name = node.name ? node.name.text : "default";
       return ts.createAssignment(
         ts.createPropertyAccess(createTsbExportAccess(), name),
@@ -212,7 +232,7 @@ export class Transformer {
         node.modifiers[1].kind === ts.SyntaxKind.DefaultKeyword
       ) {
         // export default function a() {}
-        // -> export.default = function a() {}
+        // -> tsb.exports.default = function a() {}
         const [_, __, ...rest] = node.modifiers;
         return ts.createAssignment(
           ts.createPropertyAccess(createTsbExportAccess(), "default"),
@@ -230,7 +250,7 @@ export class Transformer {
         // export function a() {}
         // ->
         // function a() {}
-        // export.a = a;
+        // tsb.exports.a = a;
         const [_, ...rest] = node.modifiers;
         return [
           ts.createFunctionExpression(
@@ -291,11 +311,11 @@ export class Transformer {
         node.modifiers[1].kind === ts.SyntaxKind.DefaultKeyword
       ) {
         // export default class Class {}
-        // -> tsb.export.default = Class
+        // -> tsb.exports.default = Class
         left = ts.createPropertyAccess(createTsbExportAccess(), "default");
       } else {
         // export class Class{}
-        // -> tsb.export.Class = Class;
+        // -> tsb.exports.Class = Class;
         left = ts.createPropertyAccess(createTsbExportAccess(), node.name!);
       }
       return ts.createAssignment(
@@ -318,7 +338,7 @@ export class Transformer {
       node.modifiers[0].kind === ts.SyntaxKind.ExportKeyword
     ) {
       // export enum Enum {}
-      // -> enum Enum {}, tsb.export.Enum = Enum
+      // -> enum Enum {}, tsb.exports.Enum = Enum
       const [_, ...rest] = node.modifiers;
       return [
         ts.createEnumDeclaration(
