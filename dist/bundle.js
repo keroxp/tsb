@@ -188,14 +188,21 @@ async function bundle(entry, opts) {
         const result = ts.transform(src, transformer.transformers());
         const transformed = printer.printFile(result
             .transformed[0]);
-        let body = ts.transpile(transformed, {
-            target: ts.ScriptTarget.ESNext,
-            jsx: ts.JsxEmit.React
-        });
+        const opts = {
+            target: ts.ScriptTarget.ESNext
+        };
+        if (moduleId.endsWith(".tsx") || moduleId.endsWith(".jsx")) {
+            opts.jsx = ts.JsxEmit.React;
+        }
+        let body = ts.transpile(transformed, opts);
         if (transformer.shouldMergeExport) {
             body = `
-      function __export(m) {
-        for (var p in m) if (!tsb.exports.hasOwnProperty(p)) tsb.exports[p] = m[p];
+      function __export(m,k) {
+        if (k) {
+          for (const p in k) if (!tsb.exports.hasOwnProperty(k[p])) tsb.exports[k[p]] = m[p];
+        } else {         
+          for (const p in m) if (!tsb.exports.hasOwnProperty(p)) tsb.exports[p] = m[p];
+        }                  
       }
       ${body}
       `;
@@ -207,7 +214,7 @@ async function bundle(entry, opts) {
         dependency: canonicalName,
         moduleId: "."
     });
-    template = `(${template}).call(this, {${body}}, ${entryId})`;
+    template = `(${template}).call(this, {${body}}, "${entryId}")`;
     const output = ts.transpile(template, {
         target: ts.ScriptTarget.ESNext
     });
