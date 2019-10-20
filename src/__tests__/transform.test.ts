@@ -81,6 +81,15 @@ var all = tsb.import("https://deno.land/std/http/server.ts");
       expect(res).toBe(`tsb.import("aa")\n`);
     });
   });
+  describe("import.meta", () => {
+    [
+      ["import.meta.url", "tsb.meta.url;\n"],
+      ["import.meta.isMain", "tsb.meta.isMain;\n"],
+      ["import.meta", "tsb.meta;\n"]
+    ].forEach(([before, after]) => {
+      expect(transform(before)).toBe(after);
+    });
+  });
   describe("export", () => {
     test("named", () => {
       const res = transform(`export { Hoge }`);
@@ -139,4 +148,15 @@ var all = tsb.import("https://deno.land/std/http/server.ts");
       expect(res).toBe("tsb.exports = {}\n");
     });
   });
+
+  test("a", () => {
+    const v = (n:ts.Node) => {
+      console.log(ts.SyntaxKind[n.kind],n)
+      n.forEachChild(v)
+    };
+    ts.forEachChild(
+      ts.createSourceFile("", "import.meta", ts.ScriptTarget.ESNext),
+      v,
+    )
+  })
 });

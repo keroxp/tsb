@@ -3,12 +3,6 @@
     "target": "es2018",
     "module": "commonjs",
     "moduleResolution": "node",
-    "baseUrl": "/Users/keroxp/src/servest",
-    "paths": {
-      "deno": ["./deno.d.ts"],
-      "https://*": ["/Users/keroxp/Library/Caches/deno/deps/https/*"],
-      "http://*": ["/Users/keroxp/Library/Caches/deno/deps/http/*"]
-    },
     "outDir": "dist",
     "strictNullChecks": true
   },

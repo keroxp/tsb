@@ -51,6 +51,8 @@ export class Transformer {
           return this.transformExportEnumDeclaration(node);
         } else if (ts.isCallExpression(node)) {
           return this.transformDynamicImport(node);
+        } else if (ts.isMetaProperty(node)) {
+          return this.transformImportMeta(node);
         }
         return node;
       };
@@ -355,4 +357,12 @@ export class Transformer {
     }
     return [node];
   }
+
+  transformImportMeta(node: ts.MetaProperty): ts.Node {
+    return ts.createPropertyAccess(
+      ts.createIdentifier("tsb"),
+      "meta"
+    );
+  }
+
 }

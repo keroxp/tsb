@@ -3,6 +3,10 @@ function __tsbEntry(modules: { [id: string]: (tsb) => void }, entryId: string) {
     import(module: string): any;
     importDynamic(module: string): Promise<any>;
     resolveModule(moduleId: string, dep: string): string;
+    meta: {
+      url: string,
+      isMain: boolean
+    }
     exports: any;
     loaded: boolean;
   }
@@ -41,6 +45,10 @@ function __tsbEntry(modules: { [id: string]: (tsb) => void }, entryId: string) {
       import: tsbImport,
       importDynamic: tsbImportDynamic,
       resolveModule,
+      meta: {
+        url: new URL(moduleId, "file://").href,
+        isMain: false
+      },
       loaded: false,
       exports: {}
     };

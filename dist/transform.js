@@ -49,6 +49,9 @@ class Transformer {
                 else if (ts.isCallExpression(node)) {
                     return this.transformDynamicImport(node);
                 }
+                else if (ts.isMetaProperty(node)) {
+                    return this.transformImportMeta(node);
+                }
                 return node;
             };
             return ts.visitNode(rootNode, visit);
@@ -260,6 +263,9 @@ class Transformer {
             ];
         }
         return [node];
+    }
+    transformImportMeta(node) {
+        return ts.createPropertyAccess(ts.createIdentifier("tsb"), "meta");
     }
 }
 exports.Transformer = Transformer;
