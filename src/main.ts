@@ -5,7 +5,7 @@ import { bundle } from "./bundle";
 
 caporal
   .name("tsb")
-  .version("0.7.1")
+  .version("0.8.1")
   .argument("file", "entry file path for bundle")
   .option("--skipFetch", "skip fetching remote module recursively")
   .action(action);
