@@ -28,7 +28,7 @@ $ yarn global add @keroxp/tsb
 Via npm
 
 ```bash
-$ npm i -g @kerpxp/tsb
+$ npm i -g @keroxp/tsb
 ```
 
 or 
