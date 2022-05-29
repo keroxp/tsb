@@ -60,7 +60,10 @@ export async function fetchModule(url: string): Promise<void> {
   });
   const dir = path.dirname(dest);
   if (!(await fs.pathExists(dir))) {
-    await fs.ensureDir(dir);
+    await /* TODO: JSFIX could not patch the breaking change:
+    Creating a directory with fs-extra no longer returns the path 
+    Suggested fix: The returned promise no longer includes the path of the new directory */
+    fs.ensureDir(dir);
   }
   if (400 <= resp.status) {
     throw new Error(`fetch failed with status code ${resp.status}`);
